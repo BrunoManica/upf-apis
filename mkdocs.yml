@@ -1,0 +1,33 @@
+theme:
+  name: "material"
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  features:
+    - navigation.sections
+    - navigation.tabs
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+site_name: UPF APIs - Aulas
+
+nav:
+  - Home: index.md
+  - Aula 1 VMs e Containers:
+    - Containers vs VMs: aula1/containers-vs-vms.md
+    - Docker: aula1/docker.md
