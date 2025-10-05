@@ -86,29 +86,29 @@ O **Docker** é uma plataforma de containerização que revolucionou a forma com
 ### **Docker Engine**
 O coração do Docker, composto por:
 
-- **Docker Daemon (dockerd):** 
+**Docker Daemon (dockerd):** 
   - Processo que roda em background
   - Gerencia imagens, containers, volumes e redes
   - Escuta comandos via API REST
 
-- **Docker CLI (docker):** 
+**Docker CLI (docker):** 
   - Interface de linha de comando
   - Envia comandos para o daemon
   - O que você usa no terminal
 
-- **Docker API:** 
+**Docker API:** 
   - Interface REST para automação
   - Usada por ferramentas como Docker Compose
 
 ### **Docker Registry**
 Sistema de armazenamento e distribuição de imagens:
 
-- **Docker Hub:** 
+**Docker Hub:** 
   - Registro público oficial
   - Milhares de imagens prontas
   - Ex: `nginx`, `postgres`, `node`
 
-- **Registros Privados:** 
+**Registros Privados:** 
   - Para empresas (AWS ECR, Azure ACR)
   - Imagens internas e confidenciais
   - Controle de acesso
@@ -129,7 +129,7 @@ Verifique se o Docker está funcionando:
 docker run hello-world
 ```
 
-### Gerenciamento de Imagens
+###  Gerenciamento de Imagens
 
 ```bash
 # Baixar uma imagem do Docker Hub
@@ -138,8 +138,8 @@ docker pull postgres:15-alpine
 # Listar imagens locais
 docker images
 
-# Construir uma imagem a partir do Dockerfile
-docker build -t minha-app:v1.0 .
+# Construir uma imagem a partir do Dockerfile  
+docker build -t minha-api:v1.0 .
 
 # Remover uma imagem
 docker rmi postgres:15-alpine
@@ -355,198 +355,6 @@ api-nestjs-docker/
 └── .dockerignore        ← Criado por você
 ```
 
-### Exemplo 2: API NestJS com Banco de Dados
-
-Vamos criar uma API completa com NestJS e PostgreSQL usando Docker Compose:
-
-**1. Criar projeto e instalar dependências:**
-```bash
-# Criar projeto NestJS
-nest new api-nestjs-postgres
-cd api-nestjs-postgres
-
-# Instalar dependências do banco
-npm install @nestjs/typeorm @nestjs/config typeorm pg
-npm install -D @types/pg
-```
-
-**2. Arquivos customizados:**
-
-**src/app.module.ts:**
-```typescript
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule } from '@nestjs/config';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-
-@Module({
-  imports: [
-    ConfigModule.forRoot(),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT) || 5432,
-      username: process.env.DB_USERNAME || 'postgres',
-      password: process.env.DB_PASSWORD || 'senha123',
-      database: process.env.DB_DATABASE || 'meubanco',
-      autoLoadEntities: true,
-      synchronize: true, // Apenas para desenvolvimento
-    }),
-  ],
-  controllers: [AppController],
-  providers: [AppService],
-})
-export class AppModule {}
-```
-
-**src/app.controller.ts:**
-```typescript
-import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
-
-@Controller()
-export class AppController {
-  constructor(private readonly appService: AppService) {}
-
-  @Get()
-  getHello(): string {
-    return this.appService.getHello();
-  }
-
-  @Get('health')
-  async getHealth() {
-    return await this.appService.getHealth();
-  }
-}
-```
-
-**src/app.service.ts:**
-```typescript
-import { Injectable } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
-
-@Injectable()
-export class AppService {
-  constructor(
-    @InjectDataSource()
-    private dataSource: DataSource,
-  ) {}
-
-  getHello(): string {
-    return 'Olá Docker! API NestJS com PostgreSQL 🐳🐘';
-  }
-
-  async getHealth() {
-    try {
-      await this.dataSource.query('SELECT 1');
-      return {
-        status: 'OK',
-        message: 'API e banco funcionando perfeitamente!',
-        timestamp: new Date().toISOString(),
-        database: 'PostgreSQL conectado',
-        environment: 'Docker Container'
-      };
-    } catch (error) {
-      return {
-        status: 'ERROR',
-        message: 'Erro na conexão com o banco',
-        error: error.message
-      };
-    }
-  }
-}
-```
-
-**docker-compose.yml:**
-```yaml
-version: '3.8'
-
-services:
-  # API NestJS
-  api:
-    build: .
-    container_name: api-nestjs
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USERNAME=postgres
-      - DB_PASSWORD=senha123
-      - DB_DATABASE=meubanco
-    depends_on:
-      - postgres
-    networks:
-      - app-network
-
-  # Banco PostgreSQL
-  postgres:
-    image: postgres:15-alpine
-    container_name: postgres-db
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=senha123
-      - POSTGRES_DB=meubanco
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge
-
-volumes:
-  postgres-data:
-```
-
-**Dockerfile:**
-```dockerfile
-FROM node:18-alpine
-
-# Instalar NestJS CLI
-RUN npm install -g @nestjs/cli
-
-WORKDIR /app
-
-# Copiar e instalar dependências
-COPY package*.json ./
-RUN npm ci --only=production
-
-# Copiar código
-COPY . .
-
-# Compilar aplicação
-RUN npm run build
-
-EXPOSE 3000
-
-CMD ["npm", "run", "start:prod"]
-```
-
-**Execução:**
-```bash
-# Subir todos os serviços
-docker-compose up -d
-
-# Ver logs da API
-docker-compose logs api
-
-# Ver logs do banco
-docker-compose logs postgres
-
-# Testar a API
-curl http://localhost:3000
-curl http://localhost:3000/health
-
-# Parar serviços
-docker-compose down
-```
 
 ## Vantagens do Docker
 
@@ -586,56 +394,6 @@ docker-compose down
 - **Infraestrutura como código**: Dockerfiles versionados
 - **Ambientes múltiplos**: dev, staging, produção
 - **Backup**: Imagens como backup do ambiente
-
-## Melhores Práticas
-
-### Dockerfile
-- **Use imagens oficiais**: `node:18-alpine` em vez de `ubuntu + instalar node`
-- **Minimize camadas**: Combine comandos `RUN` com `&&`
-- **Use .dockerignore**: Exclua `node_modules`, `.git`, etc.
-- **Ordene instruções**: Coloque mudanças frequentes por último
-- **Use usuário não-root**: `USER node` para segurança
-
-**Exemplo de Dockerfile otimizado para NestJS:**
-```dockerfile
-FROM node:18-alpine
-
-# Instalar NestJS CLI
-RUN npm install -g @nestjs/cli
-
-# Criar usuário não-root
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nestjs -u 1001
-
-WORKDIR /app
-
-# Copiar e instalar dependências primeiro (cache)
-COPY package*.json ./
-RUN npm ci --only=production
-
-# Copiar código depois
-COPY --chown=nestjs:nodejs . .
-
-# Compilar aplicação
-RUN npm run build
-
-USER nestjs
-
-EXPOSE 3000
-CMD ["npm", "run", "start:prod"]
-```
-
-### Segurança
-- **Imagens atualizadas**: Use `docker scan` para vulnerabilidades
-- **Sem secrets**: Use variáveis de ambiente ou secrets
-- **Multi-stage builds**: Reduz tamanho da imagem final
-- **Privilégios mínimos**: Não use `--privileged`
-
-### Performance
-- **Cache de build**: Ordene instruções por frequência de mudança
-- **Imagens pequenas**: Prefira Alpine Linux
-- **Volumes**: Para dados persistentes
-- **Health checks**: Monitore saúde dos containers
 
 ## Alternativas ao Docker
 
@@ -684,4 +442,4 @@ Interface web para gerenciar ambientes Docker em produção.
 
 ## Referências
 
-Este conteúdo é baseado na documentação oficial do [Docker](https://docs.docker.com/), melhores práticas da comunidade e experiência prática em desenvolvimento.
+Este conteúdo é baseado na documentação oficial do [Docker](https://docs.docker.com/).
