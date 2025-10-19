@@ -26,21 +26,23 @@ Existem vários estilos de API, cada um com seu propósito:
 
 - **Endpoints**: são os endereços (URLs) que representam recursos.  
   Exemplo:  
-  ```
+```bash
   GET    /api/users       → Lista usuários  
   POST   /api/users       → Cria usuário  
   PUT    /api/users/123   → Atualiza usuário 123  
   DELETE /api/users/123   → Deleta usuário 123
-  ```
+```
 
 - **Métodos HTTP**: indicam a ação (GET = ler, POST = criar, PUT = atualizar, DELETE = remover).
 
 - **Status Codes**: informam o resultado da requisição:  
+```bash
   - `200 OK` → deu tudo certo  
   - `201 Created` → recurso criado  
   - `400 Bad Request` → problema na requisição  
   - `404 Not Found` → não encontrado  
   - `500 Internal Server Error` → erro no servidor
+```
 
 ## Segurança em APIs
 
@@ -65,9 +67,11 @@ Uma boa documentação inclui endpoints, exemplos de requisições e respostas, 
 APIs evoluem — e é importante fazer isso **sem quebrar os sistemas que já dependem delas**.
 
 Exemplos de versionamento:
+```bash
 - Na URL: `/api/v1/users`
 - No header: `Accept: application/vnd.api+json;version=1`
 - Na query: `/api/users?version=1`
+```
 
 ## Monitoramento e Limites de Uso
 
