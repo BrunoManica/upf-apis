@@ -16,7 +16,7 @@ Essa API permitirá **criar, listar, buscar, atualizar e deletar usuários** —
 ## Estrutura da Aplicação
 
 ```
-nestjs-example/
+minha-api/
 ├─ prisma/
 │  └─ schema.prisma
 ├─ src/
@@ -38,8 +38,8 @@ nestjs-example/
 
 ```bash
 npm i -g @nestjs/cli
-nest new nestjs-example
-cd nestjs-example
+nest new minha-api
+cd minha-api
 
 npm install @prisma/client
 npm install -D prisma
@@ -49,7 +49,7 @@ npm install pg
 Crie um arquivo `.env` com o conteúdo:
 
 ```
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/nest_example?schema=public"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/minha_api?schema=public"
 ```
 
 ## Passo 2 — Criar o Modelo Prisma
