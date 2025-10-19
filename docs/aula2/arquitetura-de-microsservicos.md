@@ -19,6 +19,42 @@ Cada microsserviço representa **uma única função de negócio** e pode ser:
 - **Serviço de Pagamento** → processa transações  
 - **Serviço de Usuários** → autenticação e perfis
 
+![Arquitetura de Microsserviços](https://substackcdn.com/image/fetch/$s_!asmi!,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F7f717d81-d309-4313-a57e-f997cbdffc5b_1600x1000.gif)
+
+## Empresas que Usam Microsserviços
+
+Muitas empresas de grande porte adotaram a arquitetura de microsserviços para lidar com a complexidade e escala de seus sistemas:
+
+### Netflix
+- **Pioneira** na adoção de microsserviços
+- Migrou de monólito para **centenas de microsserviços**
+- Cada funcionalidade (recomendações, streaming, pagamentos) é um serviço independente
+- **Escalabilidade global** para milhões de usuários simultâneos
+
+### Amazon
+- **E-commerce gigante** com milhares de serviços
+- Cada página do site é composta por **dezenas de microsserviços**
+- **AWS** nasceu da necessidade de gerenciar essa complexidade
+- **Deploy independente** permite atualizações constantes
+
+### Uber
+- **Plataforma de mobilidade** com múltiplos serviços
+- **Serviços separados** para: passageiros, motoristas, pagamentos, mapas, notificações
+- **Escalabilidade regional** e **tolerância a falhas**
+- **Desenvolvimento paralelo** por equipes especializadas
+
+### Spotify
+- **Plataforma de streaming** com arquitetura distribuída
+- **Squads** (equipes) responsáveis por diferentes funcionalidades
+- **Squadify** → cada squad tem autonomia total sobre seu serviço
+- **Inovação contínua** sem impactar o sistema principal
+
+### Airbnb
+- **Plataforma de hospedagem** com microsserviços
+- **Serviços independentes** para: busca, reservas, pagamentos, mensagens
+- **Escalabilidade global** para diferentes mercados
+- **Deploy independente** permite experimentação rápida
+
 ## Características Principais
 
 - **Desacoplamento** → cada serviço vive e evolui por conta própria  
