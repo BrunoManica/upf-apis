@@ -31,3 +31,7 @@ nav:
   - Aula 1 VMs e Containers:
     - Containers vs VMs: aula1/containers-vs-vms.md
     - Docker: aula1/docker.md
+  - Aula 2 APIs e Microsserviços:
+    - APIs: aula2/apis.md
+    - Exemplo Prático de API: aula2/exemplo-api.md
+    - Arquitetura de Microsserviços: aula2/arquitetura-de-microsservicos.md
