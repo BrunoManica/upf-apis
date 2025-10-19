@@ -34,7 +34,54 @@ minha-api/
 └─ docker-compose.yml
 ```
 
-## Passo 1 — Criar o Projeto
+## Passo 1 — Instalar PostgreSQL
+
+### Opção 1: Docker (Recomendado)
+
+```bash
+# Baixar e executar PostgreSQL na porta 5433
+docker run --name postgres-api -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=minha_api -p 5433:5432 -d postgres:15
+
+# Verificar se está rodando
+docker ps
+```
+
+### Opção 2: Instalação Local
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install postgresql postgresql-contrib
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# Criar usuário e banco
+sudo -u postgres psql
+CREATE USER postgres WITH PASSWORD 'postgres';
+CREATE DATABASE minha_api OWNER postgres;
+GRANT ALL PRIVILEGES ON DATABASE minha_api TO postgres;
+\q
+
+# Configurar para rodar na porta 5433
+sudo nano /etc/postgresql/*/main/postgresql.conf
+# Alterar: port = 5433
+sudo systemctl restart postgresql
+```
+
+**macOS (Homebrew):**
+```bash
+brew install postgresql
+brew services start postgresql
+createdb minha_api
+```
+
+**Windows:**
+```bash
+# Baixar do site oficial: https://www.postgresql.org/download/windows/
+# Durante instalação, configurar porta 5433
+```
+
+## Passo 2 — Criar o Projeto
 
 ```bash
 npm i -g @nestjs/cli
@@ -44,15 +91,17 @@ cd minha-api
 npm install @prisma/client
 npm install -D prisma
 npm install pg
+npm install @nestjs/swagger swagger-ui-express
 ```
 
 Crie um arquivo `.env` com o conteúdo:
 
 ```
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/minha_api?schema=public"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/minha_api?schema=public"
 ```
 
-## Passo 2 — Criar o Modelo Prisma
+
+## Passo 3 — Criar o Modelo Prisma
 
 `prisma/schema.prisma`:
 
@@ -81,7 +130,16 @@ npx prisma migrate dev --name init
 npx prisma generate
 ```
 
-## Passo 3 — Criar o PrismaService
+## Passo 4 — Criar o PrismaService
+
+### Gerar arquivos:
+
+```bash
+nest generate module prisma
+nest generate service prisma
+```
+
+### Arquivos gerados:
 
 `src/prisma/prisma.service.ts`:
 
@@ -117,13 +175,27 @@ export class PrismaModule {}
 
 ---
 
-## Passo 4 — Módulo de Usuários
+## Passo 5 — Módulo de Usuários
+
+### Gerar arquivos:
+
+```bash
+nest generate resource users
+# Escolha: REST API, Yes para CRUD entry points
+```
+
+### Arquivos gerados:
 
 ### DTO — `src/users/dto/create-user.dto.ts`
 
 ```ts
+import { ApiProperty } from '@nestjs/swagger';
+
 export class CreateUserDto {
+  @ApiProperty({ description: 'Nome do usuário', example: 'João Silva' })
   name: string;
+
+  @ApiProperty({ description: 'Email do usuário', example: 'joao@example.com' })
   email: string;
 }
 ```
@@ -165,34 +237,49 @@ export class UsersService {
 
 ```ts
 import { Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 
+@ApiTags('users')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Criar usuário' })
+  @ApiResponse({ status: 201, description: 'Usuário criado com sucesso' })
   create(@Body() dto: CreateUserDto) {
     return this.usersService.create(dto);
   }
 
   @Get()
+  @ApiOperation({ summary: 'Listar todos os usuários' })
+  @ApiResponse({ status: 200, description: 'Lista de usuários' })
   findAll() {
     return this.usersService.findAll();
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Buscar usuário por ID' })
+  @ApiResponse({ status: 200, description: 'Usuário encontrado' })
+  @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.findOne(id);
   }
 
   @Put(':id')
+  @ApiOperation({ summary: 'Atualizar usuário' })
+  @ApiResponse({ status: 200, description: 'Usuário atualizado com sucesso' })
+  @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: Partial<CreateUserDto>) {
     return this.usersService.update(id, dto);
   }
 
   @Delete(':id')
+  @ApiOperation({ summary: 'Deletar usuário' })
+  @ApiResponse({ status: 200, description: 'Usuário deletado com sucesso' })
+  @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.remove(id);
   }
@@ -201,7 +288,7 @@ export class UsersController {
 
 ---
 
-## Passo 5 — AppModule e Bootstrap
+## Passo 6 — AppModule e Bootstrap
 
 `src/app.module.ts`:
 
@@ -212,6 +299,8 @@ import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [PrismaModule, UsersModule],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
 ```
@@ -220,17 +309,42 @@ export class AppModule {}
 
 ```ts
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  
+  // Configuração do Swagger
+  const config = new DocumentBuilder()
+    .setTitle('Minha API')
+    .setDescription('API de exemplo com NestJS e Prisma')
+    .setVersion('1.0')
+    .addTag('users')
+    .build();
+  
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
+  
   await app.listen(3000);
   console.log('Server running on http://localhost:3000');
+  console.log('Swagger docs available at http://localhost:3000/api');
 }
 bootstrap();
 ```
 
-## Passo 6 — Testando a API
+## Passo 7 — Testando a API
+
+### Acessar Documentação Swagger
+
+Abra seu navegador e acesse: **http://localhost:3000/api**
+
+Aqui você pode:
+- Ver todos os endpoints disponíveis
+- Testar a API diretamente no navegador
+- Ver exemplos de requisições e respostas
+
+### Testando via cURL
 
 Criar usuário:
 
