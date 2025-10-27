@@ -1275,6 +1275,7 @@ npm run start:dev
 ```
 
 **Se tudo estiver OK, você verá:**
+
 - Container PostgreSQL rodando
 - Dependências instaladas sem erros
 - Banco sincronizado com sucesso
@@ -1286,17 +1287,24 @@ Acesse a documentação interativa do Swagger em: `http://localhost:3000/api`
 
 **Endpoints disponíveis:**
 
-1. **Módulo Payment (código bom)** - `/pagamentos`
-   - `POST /pagamentos` - Criar pagamento
-   - `GET /pagamentos` - Listar pagamentos
-   - `GET /pagamentos/estatisticas/visao-geral` - Ver estatísticas
+**Módulo Payment (código bom)** 
 
-2. **Módulo Legacy-Payment (código ruim)** - `/legacy-payment`
-   - `POST /legacy-payment` - Criar pagamento legacy
-   - `GET /legacy-payment` - Listar pagamentos legacy
-   - `GET /legacy-payment/stats/overview` - Ver estatísticas legacy
+`/pagamentos`
+
+- `POST /pagamentos`: Criar pagamento
+- `GET /pagamentos`: Listar pagamentos
+- `GET /pagamentos/estatisticas/visao-geral`: Ver estatísticas
+
+**Módulo Legacy-Payment (código ruim)**
+
+`/legacy-payment`
+
+- `POST /legacy-payment`: Criar pagamento legacy
+- `GET /legacy-payment`: Listar pagamentos legacy
+- `GET /legacy-payment/stats/overview`: Ver estatísticas legacy
 
 **Como testar:**
+
 1. Abra o Swagger UI no navegador
 2. Expanda o endpoint desejado
 3. Clique em "Try it out"
@@ -1369,17 +1377,20 @@ payment-api/
 ### Arquivos Principais
 
 **Configuração:**
+
 - `package.json` - Dependências do projeto
 - `nest-cli.json` - Configuração do NestJS CLI
 - `tsconfig.json` - Configuração do TypeScript
 - `eslint.config.mjs` - Configuração do ESLint
 
 **Banco de Dados:**
+
 - `prisma/schema.prisma` - Schema do banco
 - `prisma/migrations/20251027162427_init/` - Migração inicial
 - `prisma/migration_lock.toml` - Lock de migrações
 
 **Código Principal:**
+
 - `src/main.ts` - Ponto de entrada da aplicação
 - `src/app.module.ts` - Módulo principal
 - `src/app.controller.ts` - Controller principal
@@ -1387,6 +1398,7 @@ payment-api/
 - `src/database/` - Configuração do Prisma
 
 **Módulos de Pagamento:**
+
 - `src/payment/` - Módulo SOLID (código bom)
   - `dto/create-payment.dto/` - DTOs de criação
   - `interfaces/payment-strategy.interface/` - Interface de estratégia
@@ -1396,6 +1408,7 @@ payment-api/
 - `src/pix/`, `src/credit-card/`, `src/boleto/` - Serviços específicos
 
 **Testes:**
+
 - `test/app.e2e-spec.ts` - Testes end-to-end
 - `test/jest-e2e.json` - Configuração do Jest para E2E
 

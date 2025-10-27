@@ -13,12 +13,14 @@ Os princípios SOLID foram introduzidos por **Robert C. Martin** (conhecido como
 Imagine construir uma casa. Se você não seguir princípios básicos de arquitetura (fundação sólida, estrutura bem planejada, materiais adequados), a casa pode desabar ou ser muito difícil de reformar. O mesmo acontece com software!
 
 **Código sem SOLID**:
+
 - Difícil de manter e modificar
 - Propenso a bugs
 - Difícil de testar
 - Acoplado demais (mudança em uma parte quebra outras)
 
 **Código com SOLID**:
+
 - Fácil de manter e expandir
 - Menos bugs
 - Fácil de testar
@@ -33,6 +35,7 @@ Imagine construir uma casa. Se você não seguir princípios básicos de arquite
 #### Analogia do Mundo Real: Restaurante
 
 Imagine um restaurante onde o mesmo funcionário faz **tudo**:
+
 - Cozinha os pratos
 - Atende os clientes
 - Lava a louça
@@ -42,7 +45,10 @@ Imagine um restaurante onde o mesmo funcionário faz **tudo**:
 
 **Problema**: Se o funcionário ficar doente, o restaurante para! E se você quiser melhorar o atendimento, precisa mexer no mesmo código que cozinha.
 
-**Solução SOLID**: Cada funcionário tem **UMA** responsabilidade:
+**Solução SOLID**: 
+
+Cada funcionário tem **UMA** responsabilidade:
+
 - **Chef**: Só cozinha
 - **Garçom**: Só atende
 - **Lavador**: Só lava louça
@@ -82,6 +88,7 @@ export class LegacyPaymentService {
 ```
 
 **Problemas**:
+
 - Se mudar validação, pode quebrar processamento
 - Se mudar regras de negócio, pode afetar email
 - Difícil de testar cada responsabilidade separadamente
@@ -116,6 +123,7 @@ export class PaymentService {
 ```
 
 **Benefícios**:
+
 - Cada classe tem uma responsabilidade clara
 - Fácil de testar cada parte separadamente
 - Fácil de modificar uma responsabilidade sem afetar outras
@@ -130,6 +138,7 @@ export class PaymentService {
 #### Analogia do Mundo Real: Receita de Bolo
 
 Imagine uma **receita de bolo básica**:
+
 - 2 xícaras de farinha
 - 1 xícara de açúcar
 - 3 ovos
@@ -137,7 +146,10 @@ Imagine uma **receita de bolo básica**:
 
 **Problema**: Se você quiser fazer um bolo de chocolate, precisa **modificar** a receita original.
 
-**Solução SOLID**: A receita base **não muda**, mas você pode **adicionar** ingredientes:
+**Solução SOLID**: 
+
+A receita base **não muda**, mas você pode **adicionar** ingredientes:
+
 - Receita base: sempre a mesma
 - Bolo de chocolate: adiciona cacau
 - Bolo de morango: adiciona morangos
@@ -169,6 +181,7 @@ export class LegacyPaymentService {
 ```
 
 **Problemas**:
+
 - Toda vez que adicionar novo tipo, preciso modificar código existente
 - Risco de quebrar funcionalidades existentes
 - Código fica cada vez maior e mais complexo
@@ -221,6 +234,7 @@ export class PaymentService {
 ```
 
 **Benefícios**:
+
 - Adiciono novos tipos sem modificar código existente
 - Código existente continua funcionando
 - Fácil de testar cada estratégia separadamente
@@ -235,6 +249,7 @@ export class PaymentService {
 #### Analogia do Mundo Real: Funcionários e Cargos
 
 Imagine uma empresa onde você tem **funcionários** que podem ocupar diferentes **cargos**:
+
 - **Gerente**: Pode ser substituído por qualquer pessoa que "saiba gerenciar"
 - **Vendedor**: Pode ser substituído por qualquer pessoa que "saiba vender"
 - **Contador**: Pode ser substituído por qualquer pessoa que "saiba contabilizar"
@@ -242,6 +257,7 @@ Imagine uma empresa onde você tem **funcionários** que podem ocupar diferentes
 **Problema**: Se você contratar um "vendedor" que na verdade não sabe vender (só sabe fazer relatórios), ele não pode substituir um vendedor real!
 
 **Solução SOLID**: Todos os vendedores devem "implementar a interface de vendedor":
+
 - Saber apresentar produtos
 - Saber fechar vendas
 - Saber atender clientes
@@ -294,6 +310,7 @@ export class PaymentService {
 ```
 
 **Problemas**:
+
 - `CreditCardProcessor` não pode substituir `PaymentProcessor` em todos os contextos
 - Cliente espera que sempre funcione, mas cartão pode falhar
 - Viola o contrato da superclasse (deveria sempre processar)
@@ -368,6 +385,7 @@ export class PaymentService {
 ```
 
 **Benefícios**:
+
 - Qualquer processador pode substituir outro sem quebrar o código
 - Todos seguem o mesmo contrato (sempre retornam resultado, nunca lançam exceção)
 - Cliente funciona com qualquer implementação
@@ -382,6 +400,7 @@ export class PaymentService {
 #### Analogia do Mundo Real: Controle Remoto
 
 Imagine um **controle remoto gigante** com 100 botões:
+
 - Botão de ligar TV
 - Botão de volume
 - Botão de canal
@@ -394,6 +413,7 @@ Imagine um **controle remoto gigante** com 100 botões:
 **Problema**: Você só quer assistir TV, mas precisa carregar um controle gigante com 100 botões!
 
 **Solução SOLID**: **Controles específicos**:
+
 - **Controle da TV**: só botões de TV
 - **Controle do ar**: só botões de ar condicionado
 - **Controle do portão**: só botão de abrir/fechar
@@ -431,6 +451,7 @@ export class PaymentProcessor {
 ```
 
 **Problemas**:
+
 - Cliente depende de métodos que não usa
 - Interface muito grande e complexa
 - Difícil de implementar (precisa implementar todos os métodos)
@@ -506,6 +527,7 @@ export class NotificationManager {
 ```
 
 **Benefícios**:
+
 - Cada cliente depende apenas do que realmente usa
 - Interfaces menores e mais focadas
 - Fácil de implementar (só implementa o necessário)
@@ -520,6 +542,7 @@ export class NotificationManager {
 #### Analogia do Mundo Real: Tomada Elétrica
 
 Imagine uma **tomada elétrica** na sua casa:
+
 - Você **não precisa saber** como a energia é gerada
 - Pode ser hidrelétrica, solar, eólica, nuclear...
 - A **tomada é a abstração** - sempre funciona igual
@@ -564,6 +587,7 @@ export class LegacyPaymentService {
 ```
 
 **Problemas**:
+
 - Se mudar de MySQL para PostgreSQL, precisa modificar código
 - Se mudar de Gmail para Outlook, precisa modificar código
 - Difícil de testar (não consegue mockar dependências)
@@ -650,6 +674,7 @@ export class AppModule {
 ```
 
 **Benefícios**:
+
 - Posso trocar MySQL por PostgreSQL sem modificar código
 - Posso trocar Gmail por Outlook sem modificar código
 - Fácil de testar (posso usar mocks)
@@ -662,6 +687,7 @@ export class AppModule {
 ### O que é Clean Code?
 
 **Clean Code** é código que é:
+
 - **Fácil de entender** por outros desenvolvedores
 - **Fácil de modificar** e estender
 - **Fácil de testar** e debugar
@@ -728,6 +754,7 @@ export class LegacyPaymentService {
 ```
 
 **Problemas**:
+
 - Difícil de manter e modificar
 - Difícil de testar
 - Acoplado demais
@@ -787,6 +814,7 @@ export class PaymentService {
 ```
 
 **Benefícios**:
+
 - Fácil de manter e modificar
 - Fácil de testar
 - Desacoplado
