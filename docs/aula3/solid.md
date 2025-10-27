@@ -51,15 +51,15 @@ Imagine um restaurante onde o mesmo funcionário faz **tudo**:
 #### Exemplo de Violação (Código Ruim)
 
 ```typescript
-// VIOLA SRP: Esta classe faz MUITAS coisas!
+// VIOLA SRP: Uma classe faz muitas coisas
 export class LegacyPaymentService {
   async createPayment(createPaymentDto: CreateLegacyPaymentDto) {
-    // Responsabilidade 1: Validação
+    // Validação
     if (!createPaymentDto.customerName) {
       throw new Error('Nome do cliente é obrigatório');
     }
 
-    // Responsabilidade 2: Processamento de pagamento
+    // Processamento
     let processedPayment;
     if (createPaymentDto.type === 'CREDIT_CARD') {
       processedPayment = await this.processCreditCard(createPaymentDto);
@@ -67,19 +67,13 @@ export class LegacyPaymentService {
       processedPayment = await this.processPix(createPaymentDto);
     }
 
-    // Responsabilidade 3: Cálculo de taxa
+    // Cálculo e persistência
     const fee = this.calculateFee(createPaymentDto.amount, createPaymentDto.type);
-
-    // Responsabilidade 4: Aplicação de regras de negócio
     const status = this.determineStatus(createPaymentDto.amount, createPaymentDto.type);
-
-    // Responsabilidade 5: Persistência no banco
     const payment = await this.prisma.payment.create({ data: formattedData });
 
-    // Responsabilidade 6: Envio de email
+    // Notificação e log
     await this.sendEmail(payment);
-
-    // Responsabilidade 7: Log
     console.log(`Pagamento ${payment.id} criado com sucesso`);
 
     return payment;
@@ -96,12 +90,10 @@ export class LegacyPaymentService {
 #### Exemplo de Aplicação Correta (Código Bom)
 
 ```typescript
-// APLICA SRP: Cada classe tem UMA responsabilidade
+// APLICA SRP: Cada classe tem uma responsabilidade
 
-// Classe 1: Só processa PIX
 export class PixService {
   async process(valor: number, metadados: Record<string, unknown>) {
-    // Só processa PIX - nada mais!
     return {
       idTransacao: this.gerarIdTransacao(),
       status: 'PROCESSANDO',
@@ -110,28 +102,14 @@ export class PixService {
   }
 }
 
-// Classe 2: Só calcula taxas
-export class TaxaCalculator {
-  calcularTaxa(valor: number, tipo: string): number {
-    // Só calcula taxas - nada mais!
-    if (tipo === 'PIX') return 0;
-    if (tipo === 'CARTAO') return valor * 0.03;
-    return 0;
-  }
-}
-
-// Classe 3: Só orquestra pagamentos
-export class ServicoPagamento {
+export class PaymentService {
   constructor(
     private pixService: PixService,
-    private taxaCalculator: TaxaCalculator,
     private repositorio: PaymentRepository
   ) {}
 
   async criarPagamento(dados: CriarPagamentoDto) {
-    // Só orquestra - delega responsabilidades específicas
     const pagamentoProcessado = await this.pixService.process(dados.valor, dados.metadados);
-    const taxa = this.taxaCalculator.calcularTaxa(dados.valor, dados.tipo);
     return await this.repositorio.criar({ /* dados */ });
   }
 }
@@ -168,21 +146,20 @@ Imagine uma **receita de bolo básica**:
 #### Exemplo de Violação (Código Ruim)
 
 ```typescript
-// VIOLA OCP: Preciso MODIFICAR código existente para adicionar novo tipo
+// VIOLA OCP: Precisa modificar código para adicionar novo tipo
 export class LegacyPaymentService {
   async createPayment(createPaymentDto: CreateLegacyPaymentDto) {
     let processedPayment;
     
-    // if/else gigante - preciso MODIFICAR para adicionar novo tipo
     if (createPaymentDto.type === 'CREDIT_CARD') {
       processedPayment = await this.processCreditCard(createPaymentDto);
     } else if (createPaymentDto.type === 'PIX') {
       processedPayment = await this.processPix(createPaymentDto);
     } else if (createPaymentDto.type === 'BOLETO') {
       processedPayment = await this.processBoleto(createPaymentDto);
-    } else if (createPaymentDto.type === 'PAYPAL') { // MODIFIQUEI CÓDIGO EXISTENTE!
+    } else if (createPaymentDto.type === 'PAYPAL') {
       processedPayment = await this.processPayPal(createPaymentDto);
-    } else if (createPaymentDto.type === 'CRYPTO') { // MODIFIQUEI NOVAMENTE!
+    } else if (createPaymentDto.type === 'CRYPTO') {
       processedPayment = await this.processCrypto(createPaymentDto);
     }
     
@@ -200,51 +177,43 @@ export class LegacyPaymentService {
 #### Exemplo de Aplicação Correta (Código Bom)
 
 ```typescript
-// APLICA OCP: Strategy Pattern - adiciono sem modificar código existente
-
-// Interface que define o contrato
+// APLICA OCP: Strategy Pattern - adiciona sem modificar código
 export interface IPaymentStrategy {
   process(valor: number, metadados: Record<string, unknown>): Promise<DadosProcessamentoPagamento>;
   calcularTaxa(valor?: number): number;
   obterTipo(): string;
 }
 
-// Implementação PIX
-export class PixService implements IPaymentStrategy {
+export class PixService {
   async process(valor: number, metadados: Record<string, unknown>) {
-    // Implementação específica do PIX
+    // Implementação PIX
   }
   calcularTaxa() { return 0; }
   obterTipo() { return 'PIX'; }
 }
 
-// Implementação Cartão
-export class CreditCardService implements IPaymentStrategy {
+export class CreditCardService {
   async process(valor: number, metadados: Record<string, unknown>) {
-    // Implementação específica do Cartão
+    // Implementação Cartão
   }
   calcularTaxa(valor: number) { return valor * 0.03; }
   obterTipo() { return 'CARTAO_CREDITO'; }
 }
 
-// Classe principal - NÃO PRECISA MUDAR para adicionar novos tipos
-export class ServicoPagamento {
+export class PaymentService {
   private estrategias: Map<string, IPaymentStrategy>;
 
   constructor(
     private servicoPix: PixService,
-    private servicoCartao: CreditCardService,
-    // Para adicionar PayPal, só preciso injetar aqui
-    // private servicoPayPal: PayPalService,
+    private servicoCartaoCredito: CreditCardService
   ) {
     this.estrategias = new Map();
     this.estrategias.set('PIX', servicoPix);
-    this.estrategias.set('CARTAO_CREDITO', servicoCartao);
-    // this.estrategias.set('PAYPAL', servicoPayPal); // ADICIONO SEM MODIFICAR!
+    this.estrategias.set('CARTAO_CREDITO', servicoCartaoCredito);
   }
 
   async criarPagamento(dadosPagamento: CriarPagamentoDto) {
-    // Busca estratégia sem if/else - código não muda!
+    // OCP: Busca estratégia sem if/else - código não muda!
     const estrategia = this.estrategias.get(dadosPagamento.tipo);
     return await estrategia.process(dadosPagamento.valor, dadosPagamento.metadados);
   }
@@ -283,93 +252,126 @@ Qualquer pessoa que implemente essa interface pode substituir qualquer outro ven
 #### Exemplo de Violação (Código Ruim)
 
 ```typescript
-// VIOLA LSP: Preciso MODIFICAR código existente para adicionar novo tipo
-export class LegacyPaymentService {
-  async createPayment(createPaymentDto: CreateLegacyPaymentDto) {
-    // if/else gigante - preciso MODIFICAR para adicionar novo tipo
-    let processedPayment;
-    if (createPaymentDto.type === 'CREDIT_CARD') {
-      processedPayment = await this.processCreditCard(createPaymentDto);
-    } else if (createPaymentDto.type === 'PIX') {
-      processedPayment = await this.processPix(createPaymentDto);
-    } else if (createPaymentDto.type === 'BOLETO') {
-      processedPayment = await this.processBoleto(createPaymentDto);
-    } else if (createPaymentDto.type === 'PAYPAL') { // MODIFIQUEI CÓDIGO EXISTENTE!
-      processedPayment = await this.processPayPal(createPaymentDto);
-    } else if (createPaymentDto.type === 'CRYPTO') { // MODIFIQUEI NOVAMENTE!
-      processedPayment = await this.processCrypto(createPaymentDto);
+// VIOLA LSP: Subclasse não pode substituir superclasse corretamente
+export abstract class PaymentProcessor {
+  abstract process(valor: number): Promise<{ sucesso: boolean; taxa: number }>;
+  abstract calcularTaxa(valor: number): number;
+}
+
+export class PixProcessor extends PaymentProcessor {
+  async process(valor: number) {
+    // PIX sempre processa com sucesso
+    return { sucesso: true, taxa: 0 };
+  }
+  
+  calcularTaxa(valor: number) {
+    return 0; // PIX não tem taxa
+  }
+}
+
+export class CreditCardProcessor extends PaymentProcessor {
+  async process(valor: number) {
+    // Cartão pode falhar se valor for muito alto
+    if (valor > 10000) {
+      throw new Error('Valor muito alto para cartão'); // VIOLA LSP!
     }
-    
-    return processedPayment;
+    return { sucesso: true, taxa: this.calcularTaxa(valor) };
+  }
+  
+  calcularTaxa(valor: number) {
+    return valor * 0.03;
+  }
+}
+
+// Cliente que espera que TODOS os processadores funcionem igual
+export class PaymentService {
+  async processarPagamento(processor: PaymentProcessor, valor: number) {
+    // Espera que funcione sempre, mas CreditCardProcessor pode falhar!
+    const resultado = await processor.process(valor);
+    console.log(`Processado: ${resultado.sucesso}, Taxa: ${resultado.taxa}`);
   }
 }
 ```
 
 **Problemas**:
-- Toda vez que adicionar novo tipo, preciso modificar código existente
-- Risco de quebrar funcionalidades existentes
-- Código fica cada vez maior e mais complexo
-- Difícil de testar todas as combinações
+- `CreditCardProcessor` não pode substituir `PaymentProcessor` em todos os contextos
+- Cliente espera que sempre funcione, mas cartão pode falhar
+- Viola o contrato da superclasse (deveria sempre processar)
 
 #### Exemplo de Aplicação Correta (Código Bom)
 
 ```typescript
-// APLICA LSP: Strategy Pattern - adiciono sem modificar código existente
+// APLICA LSP: Todas as subclasses podem substituir a superclasse
 
-// Interface que define o contrato
-export interface IPaymentStrategy {
-  process(valor: number, metadados: Record<string, unknown>): Promise<DadosProcessamentoPagamento>;
-  calcularTaxa(valor?: number): number;
-  obterTipo(): string;
+export abstract class PaymentProcessor {
+  abstract process(valor: number): Promise<{ sucesso: boolean; taxa: number; motivo?: string }>;
+  abstract calcularTaxa(valor: number): number;
+  abstract validarValor(valor: number): { valido: boolean; motivo?: string };
 }
 
-// Implementação PIX
-export class PixService implements IPaymentStrategy {
-  async process(valor: number, metadados: Record<string, unknown>) {
-    // Implementação específica do PIX
+export class PixProcessor extends PaymentProcessor {
+  async process(valor: number) {
+    const validacao = this.validarValor(valor);
+    if (!validacao.valido) {
+      return { sucesso: false, taxa: 0, motivo: validacao.motivo };
+    }
+    return { sucesso: true, taxa: 0 };
   }
-  calcularTaxa() { return 0; }
-  obterTipo() { return 'PIX'; }
+  
+  calcularTaxa(valor: number) {
+    return 0;
+  }
+  
+  validarValor(valor: number) {
+    if (valor <= 0) {
+      return { valido: false, motivo: 'Valor deve ser positivo' };
+    }
+    return { valido: true };
+  }
 }
 
-// Implementação Cartão
-export class CreditCardService implements IPaymentStrategy {
-  async process(valor: number, metadados: Record<string, unknown>) {
-    // Implementação específica do Cartão
+export class CreditCardProcessor extends PaymentProcessor {
+  async process(valor: number) {
+    const validacao = this.validarValor(valor);
+    if (!validacao.valido) {
+      return { sucesso: false, taxa: 0, motivo: validacao.motivo };
+    }
+    return { sucesso: true, taxa: this.calcularTaxa(valor) };
   }
-  calcularTaxa(valor: number) { return valor * 0.03; }
-  obterTipo() { return 'CARTAO_CREDITO'; }
+  
+  calcularTaxa(valor: number) {
+    return valor * 0.03;
+  }
+  
+  validarValor(valor: number) {
+    if (valor <= 0) {
+      return { valido: false, motivo: 'Valor deve ser positivo' };
+    }
+    if (valor > 10000) {
+      return { valido: false, motivo: 'Valor muito alto para cartão' };
+    }
+    return { valido: true };
+  }
 }
 
-// Classe principal - NÃO PRECISA MUDAR para adicionar novos tipos
-export class ServicoPagamento {
-  private estrategias: Map<string, IPaymentStrategy>;
-
-  constructor(
-    private servicoPix: PixService,
-    private servicoCartao: CreditCardService,
-    // Para adicionar PayPal, só preciso injetar aqui
-    // private servicoPayPal: PayPalService,
-  ) {
-    this.estrategias = new Map();
-    this.estrategias.set('PIX', servicoPix);
-    this.estrategias.set('CARTAO_CREDITO', servicoCartao);
-    // this.estrategias.set('PAYPAL', servicoPayPal); // ADICIONO SEM MODIFICAR!
-  }
-
-  async criarPagamento(dadosPagamento: CriarPagamentoDto) {
-    // Busca estratégia sem if/else - código não muda!
-    const estrategia = this.estrategias.get(dadosPagamento.tipo);
-    return await estrategia.process(dadosPagamento.valor, dadosPagamento.metadados);
+// Cliente que funciona com QUALQUER processador
+export class PaymentService {
+  async processarPagamento(processor: PaymentProcessor, valor: number) {
+    // Agora funciona com qualquer processador - todos seguem o mesmo contrato
+    const resultado = await processor.process(valor);
+    console.log(`Processado: ${resultado.sucesso}, Taxa: ${resultado.taxa}`);
+    if (!resultado.sucesso) {
+      console.log(`Motivo: ${resultado.motivo}`);
+    }
   }
 }
 ```
 
 **Benefícios**:
-- Adiciono novos tipos sem modificar código existente
-- Código existente continua funcionando
-- Fácil de testar cada estratégia separadamente
-- Código mais limpo e organizado
+- Qualquer processador pode substituir outro sem quebrar o código
+- Todos seguem o mesmo contrato (sempre retornam resultado, nunca lançam exceção)
+- Cliente funciona com qualquer implementação
+- Fácil de testar e estender
 
 ---
 
@@ -399,43 +401,30 @@ Imagine um **controle remoto gigante** com 100 botões:
 #### Exemplo de Violação (Código Ruim)
 
 ```typescript
-// VIOLA ISP: Interface gigante com muitos métodos
+// VIOLA ISP: Interface com muitos métodos
 export interface IPaymentService {
-  // Métodos de pagamento
   processPayment(valor: number, tipo: string): Promise<any>;
   calculateFee(valor: number, tipo: string): number;
-  
-  // Métodos de email
   sendEmail(to: string, subject: string, body: string): Promise<void>;
   sendSMS(phone: string, message: string): Promise<void>;
-  
-  // Métodos de banco de dados
   savePayment(payment: any): Promise<any>;
   findPayment(id: string): Promise<any>;
   updatePayment(id: string, data: any): Promise<any>;
   deletePayment(id: string): Promise<void>;
-  
-  // Métodos de validação
   validateEmail(email: string): boolean;
   validatePhone(phone: string): boolean;
   validateCreditCard(card: string): boolean;
-  
-  // Métodos de relatório
   generateReport(startDate: Date, endDate: Date): Promise<any>;
   exportToExcel(data: any[]): Promise<Buffer>;
   exportToPDF(data: any[]): Promise<Buffer>;
 }
 
-// Cliente que só quer processar pagamentos
 export class PaymentProcessor {
   constructor(private paymentService: IPaymentService) {}
   
   async process(valor: number, tipo: string) {
-    // Forçado a depender de métodos que não usa
     const payment = await this.paymentService.processPayment(valor, tipo);
     const fee = this.paymentService.calculateFee(valor, tipo);
-    
-    // Mas não usa: sendEmail, sendSMS, savePayment, etc.
     return { payment, fee };
   }
 }
@@ -450,16 +439,13 @@ export class PaymentProcessor {
 #### Exemplo de Aplicação Correta (Código Bom)
 
 ```typescript
-// APLICA ISP: Interfaces específicas e focadas
-
-// Interface específica para processamento de pagamento
-export interface IPaymentProcessor {
+// APLICA ISP: Interfaces específicas
+export interface IPaymentStrategy {
   process(valor: number, metadados: Record<string, unknown>): Promise<DadosProcessamentoPagamento>;
   calcularTaxa(valor?: number): number;
   obterTipo(): string;
 }
 
-// Interface específica para persistência
 export interface IPaymentRepository {
   criar(dados: Omit<DadosPagamento, 'id' | 'dataCriacao' | 'dataAtualizacao'>): Promise<DadosPagamento>;
   buscarPorId(id: string): Promise<DadosPagamento | null>;
@@ -467,32 +453,27 @@ export interface IPaymentRepository {
   obterEstatisticas(): Promise<EstatisticasPagamento>;
 }
 
-// Interface específica para notificações
 export interface INotificationService {
   enviarEmail(destinatario: string, assunto: string, corpo: string): Promise<void>;
   enviarSMS(telefone: string, mensagem: string): Promise<void>;
 }
 
-// Interface específica para validação
 export interface IValidationService {
   validarEmail(email: string): boolean;
   validarTelefone(telefone: string): boolean;
   validarCartaoCredito(cartao: string): boolean;
 }
 
-// Cliente que só quer processar pagamentos
 export class PaymentProcessor {
   constructor(
-    private paymentService: IPaymentProcessor, // Só depende do que usa
-    private repository: IPaymentRepository     // Só depende do que usa
+    private paymentService: IPaymentStrategy,
+    private repository: IPaymentRepository
   ) {}
   
   async process(valor: number, tipo: string, metadados: Record<string, unknown>) {
-    // Usa apenas métodos necessários
     const payment = await this.paymentService.process(valor, metadados);
     const taxa = this.paymentService.calcularTaxa(valor);
     
-    // Salva no banco
     const pagamentoSalvo = await this.repository.criar({
       tipo,
       valor: valor + taxa,
@@ -506,15 +487,13 @@ export class PaymentProcessor {
   }
 }
 
-// Cliente que só quer enviar notificações
 export class NotificationManager {
   constructor(
-    private notificationService: INotificationService, // Só depende do que usa
-    private validationService: IValidationService       // Só depende do que usa
+    private notificationService: INotificationService,
+    private validationService: IValidationService
   ) {}
   
   async enviarNotificacaoPagamento(email: string, telefone: string, dados: any) {
-    // Usa apenas métodos necessários
     if (this.validationService.validarEmail(email)) {
       await this.notificationService.enviarEmail(email, 'Pagamento Processado', 'Seu pagamento foi processado');
     }
@@ -551,40 +530,31 @@ Imagine uma **tomada elétrica** na sua casa:
 #### Exemplo de Violação (Código Ruim)
 
 ```typescript
-// VIOLA DIP: Dependência direta de implementações concretas
-
-// Implementação concreta do banco
+// VIOLA DIP: Dependência direta de implementações
 export class MySQLDatabase {
   async save(data: any) {
-    // Código específico do MySQL
     console.log('Salvando no MySQL...');
   }
 }
 
-// Implementação concreta do email
 export class GmailService {
   async sendEmail(to: string, subject: string, body: string) {
-    // Código específico do Gmail
     console.log('Enviando email via Gmail...');
   }
 }
 
-// Cliente com dependências diretas
 export class LegacyPaymentService {
-  private database: MySQLDatabase;        // Dependência direta
-  private emailService: GmailService;    // Dependência direta
+  private database: MySQLDatabase;
+  private emailService: GmailService;
 
   constructor() {
-    // Cria instâncias diretamente
     this.database = new MySQLDatabase();
     this.emailService = new GmailService();
   }
 
   async createPayment(data: any) {
-    // Processa pagamento
     const payment = { id: '123', amount: 100 };
     
-    // Depende de implementação específica
     await this.database.save(payment);
     await this.emailService.sendEmail('user@email.com', 'Pagamento', 'Processado');
     
@@ -602,21 +572,17 @@ export class LegacyPaymentService {
 #### Exemplo de Aplicação Correta (Código Bom)
 
 ```typescript
-// APLICA DIP: Depende de abstrações, não implementações
-
-// Abstração para banco de dados
+// APLICA DIP: Depende de abstrações
 export interface IDatabase {
   save(data: any): Promise<void>;
   findById(id: string): Promise<any>;
   findAll(): Promise<any[]>;
 }
 
-// Abstração para serviço de email
 export interface IEmailService {
   sendEmail(to: string, subject: string, body: string): Promise<void>;
 }
 
-// Implementação concreta do MySQL
 export class MySQLDatabase implements IDatabase {
   async save(data: any) {
     console.log('Salvando no MySQL...');
@@ -631,7 +597,6 @@ export class MySQLDatabase implements IDatabase {
   }
 }
 
-// Implementação concreta do PostgreSQL
 export class PostgreSQLDatabase implements IDatabase {
   async save(data: any) {
     console.log('Salvando no PostgreSQL...');
@@ -646,32 +611,27 @@ export class PostgreSQLDatabase implements IDatabase {
   }
 }
 
-// Implementação concreta do Gmail
 export class GmailService implements IEmailService {
   async sendEmail(to: string, subject: string, body: string) {
     console.log('Enviando email via Gmail...');
   }
 }
 
-// Implementação concreta do Outlook
 export class OutlookService implements IEmailService {
   async sendEmail(to: string, subject: string, body: string) {
     console.log('Enviando email via Outlook...');
   }
 }
 
-// Cliente que depende de abstrações
-export class ServicoPagamento {
+export class PaymentService {
   constructor(
-    private database: IDatabase,        // Depende de abstração
-    private emailService: IEmailService // Depende de abstração
+    private database: IDatabase,
+    private emailService: IEmailService
   ) {}
 
   async criarPagamento(data: any) {
-    // Processa pagamento
     const payment = { id: '123', amount: 100 };
     
-    // Usa abstrações - funciona com qualquer implementação
     await this.database.save(payment);
     await this.emailService.sendEmail('user@email.com', 'Pagamento', 'Processado');
     
@@ -679,12 +639,10 @@ export class ServicoPagamento {
   }
 }
 
-// Configuração com injeção de dependências
 export class AppModule {
   static create() {
-    // Pode trocar implementações facilmente
-    const database = new MySQLDatabase();        // ou new PostgreSQLDatabase()
-    const emailService = new GmailService();     // ou new OutlookService()
+    const database = new MySQLDatabase();
+    const emailService = new GmailService();
     
     return new ServicoPagamento(database, emailService);
   }
@@ -744,17 +702,13 @@ export class AppModule {
 ### Módulo Legacy-Payment (Sem SOLID)
 
 ```typescript
-// Código ruim - viola todos os princípios SOLID
+// Código ruim - viola SOLID
 export class LegacyPaymentService {
   async createPayment(createPaymentDto: CreateLegacyPaymentDto) {
-    // SRP: Faz validação, processamento, cálculo, persistência, email, log
-    
-    // Validação
     if (!createPaymentDto.customerName) {
       throw new Error('Nome do cliente é obrigatório');
     }
     
-    // Processamento com if/else gigante
     let processedPayment;
     if (createPaymentDto.type === 'CREDIT_CARD') {
       processedPayment = await this.processCreditCard(createPaymentDto);
@@ -762,16 +716,10 @@ export class LegacyPaymentService {
       processedPayment = await this.processPix(createPaymentDto);
     }
     
-    // Cálculo de taxa
     const fee = this.calculateFee(createPaymentDto.amount, createPaymentDto.type);
-    
-    // Persistência
     const payment = await this.prisma.payment.create({ data: formattedData });
     
-    // Email
     await this.sendEmail(payment);
-    
-    // Log
     console.log(`Pagamento ${payment.id} criado com sucesso`);
     
     return payment;
@@ -788,24 +736,38 @@ export class LegacyPaymentService {
 ### Módulo Payment (Com SOLID)
 
 ```typescript
-// Código bom - aplica todos os princípios SOLID
-
-// SRP: Cada classe tem uma responsabilidade
-export class PixService implements IPaymentStrategy {
+// Código bom - aplica SOLID
+export class PixService {
   async process(valor: number, metadados: Record<string, unknown>) {
-    // Só processa PIX
+    // Processa PIX
   }
 }
 
-export class ServicoPagamento {
+export class CreditCardService {
+  async process(valor: number, metadados: Record<string, unknown>) {
+    // Processa Cartão
+  }
+}
+
+export class BoletoService {
+  async process(valor: number, metadados: Record<string, unknown>) {
+    // Processa Boleto
+  }
+}
+
+export class PaymentService {
   constructor(
     @Inject('IPaymentRepository')
     private repositorioPagamento: IPaymentRepository, // DIP: Depende de abstração
+    private servicoCartaoCredito: CreditCardService,  // DIP: Injeção de dependência
     private servicoPix: PixService,                   // DIP: Injeção de dependência
+    private servicoBoleto: BoletoService              // DIP: Injeção de dependência
   ) {
     // OCP: Estratégias podem ser adicionadas sem modificar código
     this.estrategias = new Map();
+    this.estrategias.set('CARTAO_CREDITO', servicoCartaoCredito);
     this.estrategias.set('PIX', servicoPix);
+    this.estrategias.set('BOLETO', servicoBoleto);
   }
 
   async criarPagamento(dadosPagamento: CriarPagamentoDto) {

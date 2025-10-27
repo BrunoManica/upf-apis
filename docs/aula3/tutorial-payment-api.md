@@ -23,7 +23,7 @@ nest new payment-api
 cd payment-api
 
 # Instalar dependências adicionais
-npm install @prisma/client prisma class-validator class-transformer @nestjs/swagger swagger-ui-express
+npm install @prisma/client prisma @nestjs/swagger swagger-ui-express
 ```
 
 ### 1.2 Configurar TypeScript
@@ -33,22 +33,26 @@ O NestJS já vem com TypeScript configurado, mas vamos verificar o `tsconfig.jso
 ```json
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolvePackageJsonExports": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "target": "ES2020",
+    "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
-    "strictNullChecks": false,
+    "strictNullChecks": true,
+    "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false
   }
 }
@@ -123,14 +127,7 @@ docker-compose down
 
 **Recomendação**: Use a **Opção 1** (docker run) para simplicidade no tutorial.
 
-### 2.2 Configurar Prisma
-
-```bash
-# Inicializar Prisma
-npx prisma init
-```
-
-### 2.3 Criar arquivo .env
+### 2.2 Criar arquivo .env
 
 **IMPORTANTE**: O arquivo `.env` deve ser criado na **raiz do projeto** (mesmo nível do `package.json`).
 
@@ -213,14 +210,14 @@ npx prisma migrate dev --name init
 npx prisma generate
 ```
 
-## Passo 3: Criar Módulo Database
+## Passo 3: Criar Módulo Prisma
 
 ### 3.1 Criar PrismaService
 
 ```bash
-# Criar módulo database
+# Criar módulo prisma
 nest g module database
-nest g service database --no-spec
+nest g service prisma --no-spec
 ```
 
 Editar `src/database/prisma.service.ts`:
@@ -294,7 +291,7 @@ Editar `src/legacy-payment/legacy-payment.service.ts`:
 ```typescript
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { CreateLegacyPaymentDto } from './dto/create-legacy-payment.dto';
+import { CreateLegacyPaymentDto } from './dto/create-legacy-payment.dto/create-legacy-payment.dto';
 
 @Injectable()
 export class LegacyPaymentService {
@@ -314,21 +311,27 @@ export class LegacyPaymentService {
     // if/else gigante - viola OCP
     let processedPayment;
     if (createPaymentDto.type === 'CREDIT_CARD') {
-      processedPayment = await this.processCreditCard(createPaymentDto);
+      processedPayment = this.processCreditCard(createPaymentDto);
     } else if (createPaymentDto.type === 'PIX') {
-      processedPayment = await this.processPix(createPaymentDto);
+      processedPayment = this.processPix(createPaymentDto);
     } else if (createPaymentDto.type === 'BOLETO') {
-      processedPayment = await this.processBoleto(createPaymentDto);
+      processedPayment = this.processBoleto(createPaymentDto);
     } else {
       throw new Error('Tipo de pagamento não suportado');
     }
 
     // Cálculo de taxa misturado
-    const fee = this.calculateFee(createPaymentDto.amount, createPaymentDto.type);
+    const fee = this.calculateFee(
+      createPaymentDto.amount,
+      createPaymentDto.type,
+    );
     const totalAmount = createPaymentDto.amount + fee;
 
     // Aplicação de regras misturada
-    const status = this.determineStatus(createPaymentDto.amount, createPaymentDto.type);
+    const status = this.determineStatus(
+      createPaymentDto.amount,
+      createPaymentDto.type,
+    );
 
     // Formatação de dados misturada
     const formattedData = this.formatPaymentData(
@@ -340,11 +343,18 @@ export class LegacyPaymentService {
 
     // Persistência misturada
     const payment = await this.prisma.payment.create({
-      data: formattedData,
+      data: {
+        ...formattedData,
+        // Converte metadata para o formato aceito pelo Prisma
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        metadata: formattedData.metadata
+          ? JSON.parse(JSON.stringify(formattedData.metadata))
+          : undefined,
+      },
     });
 
-    // Envio de email misturado
-    await this.sendEmail(payment);
+    // Envio de email separado do fluxo crítico, e aguardando completion
+    this.sendEmail(payment);
 
     // Log misturado
     console.log(`Pagamento ${payment.id} criado com sucesso`);
@@ -353,7 +363,7 @@ export class LegacyPaymentService {
   }
 
   // Métodos privados que fazem muitas coisas
-  private async processCreditCard(dto: CreateLegacyPaymentDto) {
+  private processCreditCard(dto: CreateLegacyPaymentDto) {
     if (!dto.cardNumber || !dto.cvv || !dto.expiryDate) {
       throw new Error('Dados do cartão são obrigatórios');
     }
@@ -367,7 +377,7 @@ export class LegacyPaymentService {
     };
   }
 
-  private async processPix(dto: CreateLegacyPaymentDto) {
+  private processPix(dto: CreateLegacyPaymentDto) {
     if (!dto.pixKey) {
       throw new Error('Chave PIX é obrigatória');
     }
@@ -379,7 +389,7 @@ export class LegacyPaymentService {
     };
   }
 
-  private async processBoleto(dto: CreateLegacyPaymentDto) {
+  private processBoleto(dto: CreateLegacyPaymentDto) {
     if (!dto.dueDate) {
       throw new Error('Data de vencimento é obrigatória');
     }
@@ -412,14 +422,19 @@ export class LegacyPaymentService {
     return 'APPROVED';
   }
 
-  private formatPaymentData(dto: CreateLegacyPaymentDto, processed: any, total: number, status: string) {
+  private formatPaymentData(
+    dto: CreateLegacyPaymentDto,
+    processed: any,
+    total: number,
+    status: string,
+  ) {
     return {
       type: dto.type,
       amount: total,
       status,
       customerName: dto.customerName.toUpperCase(),
       customerEmail: dto.customerEmail.toLowerCase(),
-      metadata: processed,
+      metadata: processed as Record<string, unknown>,
     };
   }
 
@@ -434,7 +449,8 @@ export class LegacyPaymentService {
     return '34191.79001 01043.510047 91020.150008 1 84460000020000';
   }
 
-  private async sendEmail(payment: any) {
+  private sendEmail(payment: any) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     console.log(`📧 Email enviado para ${payment.customerEmail}`);
   }
 
@@ -464,6 +480,7 @@ export class LegacyPaymentService {
     const payments = await this.prisma.payment.findMany();
     const totalAmount = payments.reduce((sum, p) => sum + Number(p.amount), 0);
     const byType = payments.reduce((acc, p) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       acc[p.type] = (acc[p.type] || 0) + 1;
       return acc;
     }, {});
@@ -474,7 +491,8 @@ export class LegacyPaymentService {
       byType: Object.entries(byType).map(([type, count]) => ({
         type,
         count,
-        percentage: (((count as number) / payments.length) * 100).toFixed(1) + '%',
+        percentage:
+          (((count as number) / payments.length) * 100).toFixed(1) + '%',
       })),
     };
   }
@@ -488,8 +506,8 @@ Editar `src/legacy-payment/legacy-payment.controller.ts`:
 ```typescript
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { CreateLegacyPaymentDto } from './dto/create-legacy-payment.dto/create-legacy-payment.dto';
 import { LegacyPaymentService } from './legacy-payment.service';
-import { CreateLegacyPaymentDto } from './dto/create-legacy-payment.dto';
 
 @ApiTags('legacy-payment')
 @Controller('legacy-payment')
@@ -534,16 +552,17 @@ Editar `src/legacy-payment/legacy-payment.module.ts`:
 
 ```typescript
 import { Module } from '@nestjs/common';
-import { DatabaseModule } from '../database/database.module';
+import { DatabaseModule } from 'src/database/database.module';
 import { LegacyPaymentController } from './legacy-payment.controller';
 import { LegacyPaymentService } from './legacy-payment.service';
 
 @Module({
   imports: [DatabaseModule],
-  controllers: [LegacyPaymentController],
   providers: [LegacyPaymentService],
+  controllers: [LegacyPaymentController],
 })
 export class LegacyPaymentModule {}
+
 ```
 
 ## Passo 5: Criar Módulos de Estratégia (PIX, Cartão, Boleto)
@@ -601,7 +620,22 @@ export class PixService {
 }
 ```
 
-### 4.2 Criar Módulo Cartão de Crédito
+### 5.2 Criar Módulo PIX
+
+Editar `src/pix/pix.module.ts`:
+
+```typescript
+import { Module } from '@nestjs/common';
+import { PixService } from './pix.service';
+
+@Module({
+  providers: [PixService],
+  exports: [PixService],
+})
+export class PixModule {}
+```
+
+### 5.3 Criar Módulo Cartão de Crédito
 
 ```bash
 nest g module credit-card
@@ -663,7 +697,22 @@ export class CreditCardService {
 }
 ```
 
-### 4.3 Criar Módulo Boleto
+### 5.4 Criar Módulo Cartão de Crédito
+
+Editar `src/credit-card/credit-card.module.ts`:
+
+```typescript
+import { Module } from '@nestjs/common';
+import { CreditCardService } from './credit-card.service';
+
+@Module({
+  providers: [CreditCardService],
+  exports: [CreditCardService],
+})
+export class CreditCardModule {}
+```
+
+### 5.5 Criar Módulo Boleto
 
 ```bash
 nest g module boleto
@@ -715,19 +764,36 @@ export class BoletoService {
 }
 ```
 
-## Passo 5: Criar Módulo Payment (Código Bom com SOLID)
+### 5.6 Criar Módulo Boleto
 
-### 5.1 Criar Interfaces
+Editar `src/boleto/boleto.module.ts`:
+
+```typescript
+import { Module } from '@nestjs/common';
+import { BoletoService } from './boleto.service';
+
+@Module({
+  providers: [BoletoService],
+  exports: [BoletoService],
+})
+export class BoletoModule {}
+```
+
+## Passo 6: Criar Módulo Payment (Código Bom com SOLID)
+
+### 6.1 Criar Interfaces
 
 ```bash
 # Criar interfaces usando NestJS CLI
 nest g interface payment/interfaces/payment-strategy.interface --no-spec
 ```
 
-Editar `src/payment/interfaces/payment-strategy.interface.ts`:
+Editar `src/payment/interfaces/payment-strategy.interface/payment-strategy.interface.interface.ts`:
 
 ```typescript
-// Interface para dados de processamento
+// Interface para dados de processamentoimport type {
+  DadosPagamento,
+  EstatisticasPagamento,
 export interface DadosProcessamentoPagamento {
   idTransacao: string;
   status: string;
@@ -777,7 +843,7 @@ export interface IPaymentRepository {
 }
 ```
 
-### 5.2 Criar DTOs
+### 6.2 Criar DTOs
 
 ```bash
 # Criar DTOs usando NestJS CLI
@@ -789,7 +855,7 @@ Editar `src/payment/dto/create-payment.dto.ts`:
 ```typescript
 import { ApiProperty } from '@nestjs/swagger';
 
-export class CriarPagamentoDto {
+export class CreatePaymentDto {
   @ApiProperty({
     description: 'Tipo do pagamento',
     enum: ['CARTAO_CREDITO', 'PIX', 'BOLETO'],
@@ -826,7 +892,7 @@ export class CriarPagamentoDto {
 }
 ```
 
-### 5.3 Criar Repositório
+### 6.3 Criar Repositório
 
 ```bash
 # Criar repositório usando NestJS CLI
@@ -837,19 +903,21 @@ Editar `src/payment/repository/payment.repository.ts`:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../../../database/prisma.service';
 import type {
   DadosPagamento,
   EstatisticasPagamento,
   IPaymentRepository,
-} from '../interfaces/payment-strategy.interface';
+} from '../../interfaces/payment-strategy.interface/payment-strategy.interface.interface';
 
 @Injectable()
 export class PaymentRepository implements IPaymentRepository {
   constructor(private prisma: PrismaService) {}
 
   // Cria novo pagamento no banco
-  async criar(dados: Omit<DadosPagamento, 'id' | 'dataCriacao' | 'dataAtualizacao'>): Promise<DadosPagamento> {
+  async criar(
+    dados: Omit<DadosPagamento, 'id' | 'dataCriacao' | 'dataAtualizacao'>,
+  ): Promise<DadosPagamento> {
     const pagamento = await this.prisma.payment.create({
       data: {
         type: dados.tipo,
@@ -857,7 +925,6 @@ export class PaymentRepository implements IPaymentRepository {
         status: dados.status,
         customerName: dados.nomeCliente,
         customerEmail: dados.emailCliente,
-        metadata: dados.metadados,
       },
     });
 
@@ -901,7 +968,7 @@ export class PaymentRepository implements IPaymentRepository {
       orderBy: { createdAt: 'desc' },
     });
 
-    return pagamentos.map(pagamento => ({
+    return pagamentos.map((pagamento) => ({
       id: pagamento.id,
       tipo: pagamento.type,
       valor: Number(pagamento.amount),
@@ -917,12 +984,18 @@ export class PaymentRepository implements IPaymentRepository {
   // Calcula estatísticas dos pagamentos
   async obterEstatisticas(): Promise<EstatisticasPagamento> {
     const pagamentos = await this.prisma.payment.findMany();
-    
+
     const totalPagamentos = pagamentos.length;
     const valorTotal = pagamentos.reduce((sum, p) => sum + Number(p.amount), 0);
-    const pagamentosAprovados = pagamentos.filter(p => p.status === 'APROVADO').length;
-    const pagamentosPendentes = pagamentos.filter(p => p.status === 'PENDENTE').length;
-    const pagamentosRejeitados = pagamentos.filter(p => p.status === 'REJEITADO').length;
+    const pagamentosAprovados = pagamentos.filter(
+      (p) => p.status === 'APROVADO',
+    ).length;
+    const pagamentosPendentes = pagamentos.filter(
+      (p) => p.status === 'PENDENTE',
+    ).length;
+    const pagamentosRejeitados = pagamentos.filter(
+      (p) => p.status === 'REJEITADO',
+    ).length;
 
     return {
       totalPagamentos,
@@ -933,9 +1006,11 @@ export class PaymentRepository implements IPaymentRepository {
     };
   }
 }
+
+
 ```
 
-### 5.4 Criar Service Principal
+### 6.4 Criar Service Principal
 
 ```bash
 nest g module payment
@@ -950,16 +1025,16 @@ import { Inject, Injectable } from '@nestjs/common';
 import { BoletoService } from '../boleto/boleto.service';
 import { CreditCardService } from '../credit-card/credit-card.service';
 import { PixService } from '../pix/pix.service';
-import { CriarPagamentoDto } from './dto/create-payment.dto';
+import { CreatePaymentDto } from './dto/create-payment.dto/create-payment.dto';
 import type {
   DadosPagamento,
   EstatisticasPagamento,
   IPaymentRepository,
   IPaymentStrategy,
-} from './interfaces/payment-strategy.interface';
+} from './interfaces/payment-strategy.interface/payment-strategy.interface.interface';
 
 @Injectable()
-export class ServicoPagamento {
+export class PaymentService {
   private estrategias: Map<string, IPaymentStrategy>;
 
   constructor(
@@ -977,7 +1052,9 @@ export class ServicoPagamento {
   }
 
   // Cria novo pagamento
-  async criarPagamento(dadosPagamento: CriarPagamentoDto): Promise<DadosPagamento> {
+  async criarPagamento(
+    dadosPagamento: CreatePaymentDto,
+  ): Promise<DadosPagamento> {
     // Busca estratégia de pagamento
     const estrategia = this.estrategias.get(dadosPagamento.tipo);
     if (!estrategia) {
@@ -995,7 +1072,10 @@ export class ServicoPagamento {
     const valorTotal = dadosPagamento.valor + taxa;
 
     // Determina status do pagamento
-    const status = this.determinarStatus(dadosPagamento.valor, dadosPagamento.tipo);
+    const status = this.determinarStatus(
+      dadosPagamento.valor,
+      dadosPagamento.tipo,
+    );
 
     // Salva no banco de dados
     const pagamento = await this.repositorioPagamento.criar({
@@ -1038,26 +1118,26 @@ export class ServicoPagamento {
 }
 ```
 
-### 5.5 Criar Controller
+### 6.5 Criar Controller
 
 Editar `src/payment/payment.controller.ts`:
 
 ```typescript
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { ServicoPagamento } from './payment.service';
-import { CriarPagamentoDto } from './dto/create-payment.dto';
+import { CreatePaymentDto } from './dto/create-payment.dto/create-payment.dto';
+import { PaymentService } from './payment.service';
 
 @ApiTags('payment')
 @Controller('pagamentos')
-export class ControladorPagamento {
-  constructor(private servicoPagamento: ServicoPagamento) {}
+export class PaymentController {
+  constructor(private servicoPagamento: PaymentService) {}
 
   @Post()
   @ApiOperation({ summary: 'Processar pagamento' })
   @ApiResponse({ status: 201, description: 'Pagamento criado com sucesso' })
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
-  async criar(@Body() dadosPagamento: CriarPagamentoDto) {
+  async criar(@Body() dadosPagamento: CreatePaymentDto) {
     return await this.servicoPagamento.criarPagamento(dadosPagamento);
   }
 
@@ -1083,27 +1163,28 @@ export class ControladorPagamento {
     return await this.servicoPagamento.obterEstatisticas();
   }
 }
+
 ```
 
-### 5.6 Configurar Módulo Payment
+### 6.6 Configurar Módulo Payment
 
 Editar `src/payment/payment.module.ts`:
 
 ```typescript
 import { Module } from '@nestjs/common';
+import { BoletoModule } from '../boleto/boleto.module';
+import { CreditCardModule } from '../credit-card/credit-card.module';
 import { DatabaseModule } from '../database/database.module';
 import { PixModule } from '../pix/pix.module';
-import { CreditCardModule } from '../credit-card/credit-card.module';
-import { BoletoModule } from '../boleto/boleto.module';
-import { ControladorPagamento } from './payment.controller';
-import { ServicoPagamento } from './payment.service';
-import { PaymentRepository } from './repository/payment.repository';
+import { PaymentController } from './payment.controller';
+import { PaymentService } from './payment.service';
+import { PaymentRepository } from './repository/payment.repository/payment.repository';
 
 @Module({
   imports: [DatabaseModule, PixModule, CreditCardModule, BoletoModule],
-  controllers: [ControladorPagamento],
+  controllers: [PaymentController],
   providers: [
-    ServicoPagamento,
+    PaymentService,
     {
       provide: 'IPaymentRepository',
       useClass: PaymentRepository,
@@ -1111,11 +1192,12 @@ import { PaymentRepository } from './repository/payment.repository';
   ],
 })
 export class PaymentModule {}
+
 ```
 
-## Passo 6: Configurar Swagger
+## Passo 7: Configurar Swagger
 
-### 6.1 Configurar main.ts
+### 7.1 Configurar main.ts
 
 Editar `src/main.ts`:
 
@@ -1144,7 +1226,7 @@ async function bootstrap() {
 bootstrap();
 ```
 
-### 6.2 Atualizar AppModule
+### 7.2 Atualizar AppModule
 
 Editar `src/app.module.ts`:
 
@@ -1160,16 +1242,16 @@ import { LegacyPaymentModule } from './legacy-payment/legacy-payment.module';
 export class AppModule {}
 ```
 
-## Passo 7: Testando a API
+## Passo 8: Testando a API
 
-### 7.1 Iniciar Servidor
+### 8.1 Iniciar Servidor
 
 ```bash
 # Iniciar servidor de desenvolvimento
 npm run start:dev
 ```
 
-### 7.2 Verificação Rápida
+### 8.2 Verificação Rápida
 
 Antes de testar os endpoints, confirme que tudo está funcionando:
 
@@ -1193,7 +1275,7 @@ npm run start:dev
 - Banco sincronizado com sucesso
 - Servidor rodando em `http://localhost:3000`
 
-### 7.3 Testar Endpoints via Swagger
+### 8.3 Testar Endpoints via Swagger
 
 Acesse a documentação interativa do Swagger em: `http://localhost:3000/api`
 
