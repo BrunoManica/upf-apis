@@ -1218,12 +1218,15 @@ async function bootstrap() {
     .addTag('payment', 'Módulo que aplica SOLID (código bom)')
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  const document = SwaggerModule.createDocument(app as any, config);
+  SwaggerModule.setup('api', app as any, document);
 
-  await app.listen(3000);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+  await (app as any).listen(3000);
 }
+
 bootstrap();
+
 ```
 
 ### 7.2 Atualizar AppModule
