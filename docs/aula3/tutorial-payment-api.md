@@ -497,6 +497,7 @@ export class LegacyPaymentService {
     };
   }
 }
+
 ```
 
 ### 4.4 Criar Controller Legacy
@@ -586,7 +587,7 @@ export class PixService {
     // Simula processamento de PIX
     const chavePix = metadados.chavePix as string;
     await new Promise((resolve) => setTimeout(resolve, 100));
-    
+
     return {
       idTransacao: this.gerarIdTransacao(),
       status: 'PROCESSANDO',
@@ -618,6 +619,7 @@ export class PixService {
     return `PIX_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }
+
 ```
 
 ### 5.2 Criar Módulo PIX
@@ -791,9 +793,7 @@ nest g interface payment/interfaces/payment-strategy.interface --no-spec
 Editar `src/payment/interfaces/payment-strategy.interface/payment-strategy.interface.interface.ts`:
 
 ```typescript
-// Interface para dados de processamentoimport type {
-  DadosPagamento,
-  EstatisticasPagamento,
+// Interface para dados de processamento
 export interface DadosProcessamentoPagamento {
   idTransacao: string;
   status: string;
@@ -841,6 +841,7 @@ export interface IPaymentRepository {
   buscarTodos(): Promise<DadosPagamento[]>;
   obterEstatisticas(): Promise<EstatisticasPagamento>;
 }
+
 ```
 
 ### 6.2 Criar DTOs
@@ -890,6 +891,7 @@ export class CreatePaymentDto {
   })
   metadados?: Record<string, unknown>;
 }
+
 ```
 
 ### 6.3 Criar Repositório
@@ -1308,6 +1310,7 @@ Após seguir todo o tutorial, sua estrutura de projeto deve ficar assim:
 ```
 payment-api/
 ├── src/
+│   ├── app.controller.spec.ts
 │   ├── app.controller.ts
 │   ├── app.module.ts
 │   ├── app.service.ts
@@ -1317,21 +1320,21 @@ payment-api/
 │   │   └── prisma.service.ts
 │   ├── payment/
 │   │   ├── dto/
-│   │   │   ├── criar-pagamento.dto.ts
-│   │   │   └── pagamento-response.dto.ts
+│   │   │   └── create-payment.dto/
+│   │   │       └── create-payment.dto.ts
 │   │   ├── interfaces/
-│   │   │   ├── dados-pagamento.interface.ts
-│   │   │   ├── dados-processamento-pagamento.interface.ts
-│   │   │   └── estatisticas-pagamento.interface.ts
+│   │   │   └── payment-strategy.interface/
+│   │   │       └── payment-strategy.interface.interface.ts
 │   │   ├── repository/
-│   │   │   └── payment.repository.ts
+│   │   │   └── payment.repository/
+│   │   │       └── payment.repository.ts
 │   │   ├── payment.controller.ts
 │   │   ├── payment.module.ts
 │   │   └── payment.service.ts
 │   ├── legacy-payment/
 │   │   ├── dto/
-│   │   │   ├── create-legacy-payment.dto.ts
-│   │   │   └── legacy-payment-response.dto.ts
+│   │   │   └── create-legacy-payment.dto/
+│   │   │       └── create-legacy-payment.dto.ts
 │   │   ├── legacy-payment.controller.ts
 │   │   ├── legacy-payment.module.ts
 │   │   └── legacy-payment.service.ts
@@ -1346,15 +1349,15 @@ payment-api/
 │       └── boleto.service.ts
 ├── prisma/
 │   ├── migrations/
-│   │   └── [timestamp]_init/
-│   │       └── migration.sql
+│   │   ├── 20251027162427_init/
+│   │   │   └── migration.sql
+│   │   └── migration_lock.toml
 │   └── schema.prisma
 ├── test/
 │   ├── app.e2e-spec.ts
 │   └── jest-e2e.json
-├── .env
 ├── .gitignore
-├── docker-compose.yml
+├── eslint.config.mjs
 ├── nest-cli.json
 ├── package.json
 ├── package-lock.json
@@ -1366,22 +1369,34 @@ payment-api/
 ### Arquivos Principais
 
 **Configuração:**
-- `.env` - Variáveis de ambiente (DATABASE_URL)
-- `docker-compose.yml` - Configuração do PostgreSQL
 - `package.json` - Dependências do projeto
+- `nest-cli.json` - Configuração do NestJS CLI
+- `tsconfig.json` - Configuração do TypeScript
+- `eslint.config.mjs` - Configuração do ESLint
 
 **Banco de Dados:**
 - `prisma/schema.prisma` - Schema do banco
-- `prisma/migrations/` - Migrações do banco
+- `prisma/migrations/20251027162427_init/` - Migração inicial
+- `prisma/migration_lock.toml` - Lock de migrações
 
 **Código Principal:**
 - `src/main.ts` - Ponto de entrada da aplicação
 - `src/app.module.ts` - Módulo principal
+- `src/app.controller.ts` - Controller principal
+- `src/app.controller.spec.ts` - Testes do controller
 - `src/database/` - Configuração do Prisma
 
 **Módulos de Pagamento:**
 - `src/payment/` - Módulo SOLID (código bom)
+  - `dto/create-payment.dto/` - DTOs de criação
+  - `interfaces/payment-strategy.interface/` - Interface de estratégia
+  - `repository/payment.repository/` - Repositório de pagamentos
 - `src/legacy-payment/` - Módulo legacy (código ruim)
+  - `dto/create-legacy-payment.dto/` - DTOs legacy
 - `src/pix/`, `src/credit-card/`, `src/boleto/` - Serviços específicos
+
+**Testes:**
+- `test/app.e2e-spec.ts` - Testes end-to-end
+- `test/jest-e2e.json` - Configuração do Jest para E2E
 
 
