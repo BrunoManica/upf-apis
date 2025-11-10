@@ -99,7 +99,7 @@ export class RpcClientService implements OnModuleInit {
       options: {
         urls: [
           // Coloque a url de conexão do rabbit aqui
-          process.env.RABBITMQ_URL || 'coloque a url de conexão do rabbit aqui',
+           'coloque a url de conexão do rabbit aqui',
         ],
         queue: 'rpc_queue', // Fila para requisições RPC
         queueOptions: { durable: true },
@@ -448,7 +448,7 @@ async function bootstrap() {
     options: {
       urls: [
         // Coloque a url de conexão do rabbit aqui
-        process.env.RABBITMQ_URL || 'coloque a url de conexão do rabbit aqui',
+         'coloque a url de conexão do rabbit aqui',
       ],
       queue: 'rpc_queue', // Deve ser igual ao cliente
       queueOptions: { durable: true },

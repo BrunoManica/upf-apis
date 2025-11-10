@@ -102,7 +102,7 @@ export class PublisherService implements OnModuleInit {
       options: {
         urls: [
           // Coloque a url de conexão do rabbit aqui
-          process.env.RABBITMQ_URL || 'coloque a url de conexão do rabbit aqui',
+           'coloque a url de conexão do rabbit aqui',
         ],
         queue: 'eventos_pedidos',
         queueOptions: { durable: true }, // Fila persiste mesmo se broker reiniciar
@@ -364,7 +364,7 @@ async function bootstrap() {
     options: {
       urls: [
         // Coloque a url de conexão do rabbit aqui
-        process.env.RABBITMQ_URL || 'coloque a url de conexão do rabbit aqui',
+         'coloque a url de conexão do rabbit aqui',
       ],
       queue: 'eventos_pedidos',
       queueOptions: { durable: true }, // Deve ser igual ao publisher-service
