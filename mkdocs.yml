@@ -45,3 +45,6 @@ nav:
     - Message Brokers: aula5/message-brokers.md
     - Tutorial Event Pattern: aula5/tutorial-pub-sub-event-pattern.md
     - Tutorial RPC Pattern: aula5/tutorial-pub-sub-rpc.md
+  - Aula 6 Observabilidade:
+    - Observabilidade e Monitoramento: aula6/observability.md
+    - Tutorial Observabilidade: aula6/tutorial-observability.md
