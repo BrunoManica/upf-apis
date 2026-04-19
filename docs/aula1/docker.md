@@ -106,7 +106,7 @@ Sistema de armazenamento e distribuição de imagens:
 **Docker Hub:** 
   - Registro público oficial
   - Milhares de imagens prontas
-  - Ex: `nginx`, `postgres`, `node`
+  - Ex: `nginx`, `postgres`, `eclipse-temurin`
 
 **Registros Privados:** 
   - Para empresas (AWS ECR, Azure ACR)
@@ -224,135 +224,188 @@ docker cp container:/caminho/arquivo.txt ./
 
 ## Exemplos Práticos
 
-### Exemplo 1: API NestJS Simples
+### Exemplo 1: API Spring Boot Simples
 
-Vamos criar uma API básica com NestJS:
+Vamos criar uma API básica com Java e Spring Boot:
 
-**1. Criar o projeto NestJS:**
+**Antes de começar, você precisa ter instalado:**
+
+- **Java JDK 21**: necessário para desenvolver e compilar a aplicação.
+- **Docker Desktop** ou **Docker Engine**: necessário para construir e executar a imagem.
+- **Editor de código**: IntelliJ IDEA, VS Code ou Eclipse.
+- **Navegador web**: usado para acessar o Spring Initializr.
+- **Ferramenta para descompactar `.zip`**: o próprio sistema operacional normalmente já faz isso.
+
+> O Gradle será gerado junto com o projeto pelo Spring Initializr, usando o Gradle Wrapper. Por isso, não é obrigatório instalar Gradle manualmente para esta aula.
+
+**Links para baixar:**
+
+- Java JDK 21: [https://adoptium.net/temurin/releases/?version=21](https://adoptium.net/temurin/releases/?version=21)
+- Docker Desktop: [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
+- IntelliJ IDEA Community: [https://www.jetbrains.com/idea/download/](https://www.jetbrains.com/idea/download/)
+- Visual Studio Code: [https://code.visualstudio.com/](https://code.visualstudio.com/)
+
+**1. Criar o projeto no Spring Initializr:**
+
+Abra o site [https://start.spring.io/](https://start.spring.io/) no navegador.
+
+Configure o projeto com estas opções:
+
+| Campo | Valor |
+|-------|-------|
+| **Project** | Gradle - Groovy |
+| **Language** | Java |
+| **Spring Boot** | versão estável sugerida pelo site |
+| **Group** | `br.edu.upf` |
+| **Artifact** | `api-spring-docker` |
+| **Name** | `api-spring-docker` |
+| **Description** | `API Spring Boot com Docker` |
+| **Package name** | `br.edu.upf.apispringdocker` |
+| **Packaging** | Jar |
+| **Java** | 21 |
+
+Em **Dependencies**, clique em **Add Dependencies** e adicione:
+
+- **Spring Web**: permite criar endpoints HTTP/REST com Spring MVC e servidor Tomcat embutido.
+
+Depois clique em **Generate** para baixar o arquivo `.zip` do projeto.
+
+**2. Descompactar e abrir o projeto:**
+
 ```bash
-# Instalar NestJS CLI globalmente
-npm install -g @nestjs/cli
-
-# Criar novo projeto
-nest new api-nestjs-docker
+# Descompactar o projeto
+unzip api-spring-docker.zip -d api-spring-docker
 
 # Entrar no diretório
-cd api-nestjs-docker
+cd api-spring-docker
 ```
 
-**2. Arquivos customizados (apenas o que você modifica):**
+Abra a pasta `api-spring-docker` no seu editor de código.
 
-**src/app.controller.ts:**
-```typescript
-import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
+**3. Arquivos customizados (apenas o que você modifica):**
 
-@Controller()
-export class AppController {
-  constructor(private readonly appService: AppService) {}
+**src/main/java/br/edu/upf/apispringdocker/ApiSpringDockerApplication.java:**
+```java
+package br.edu.upf.apispringdocker;
 
-  @Get()
-  getHello(): string {
-    return this.appService.getHello();
-  }
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-  @Get('health')
-  getHealth() {
-    return {
-      status: 'OK',
-      message: 'API funcionando perfeitamente!',
-      timestamp: new Date().toISOString(),
-      environment: 'Docker Container'
-    };
+@SpringBootApplication
+public class ApiSpringDockerApplication {
+  public static void main(String[] args) {
+    SpringApplication.run(ApiSpringDockerApplication.class, args);
   }
 }
 ```
 
-**src/app.service.ts:**
-```typescript
-import { Injectable } from '@nestjs/common';
+**src/main/java/br/edu/upf/apispringdocker/DockerController.java:**
+```java
+package br.edu.upf.apispringdocker;
 
-@Injectable()
-export class AppService {
-  getHello(): string {
-    return 'Olá Docker! API NestJS rodando em container 🐳';
+import java.time.Instant;
+import java.util.Map;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class DockerController {
+  @GetMapping("/")
+  public String hello() {
+    return "Ola Docker! API Spring Boot rodando em container.";
+  }
+
+  @GetMapping("/health")
+  public Map<String, String> health() {
+    return Map.of(
+      "status", "OK",
+      "message", "API funcionando perfeitamente!",
+      "timestamp", Instant.now().toString(),
+      "environment", "Docker Container"
+    );
   }
 }
 ```
 
-**src/main.ts:**
-```typescript
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  
-  // Habilitar CORS
-  app.enableCors();
-  
-  const port = process.env.PORT || 3000;
-  await app.listen(port);
-  
-  console.log(`🚀 API rodando na porta ${port}`);
-}
-bootstrap();
+**src/main/resources/application.properties:**
+```properties
+server.port=${PORT:8080}
 ```
 
 **Dockerfile:**
 ```dockerfile
-# Usar imagem oficial do Node.js
-FROM node:18-alpine
+# Etapa 1: construir a aplicacao com Gradle Wrapper e JDK 21
+FROM eclipse-temurin:21-jdk-alpine AS build
 
-# Instalar NestJS CLI globalmente
-RUN npm install -g @nestjs/cli
-
-# Definir diretório de trabalho
 WORKDIR /app
 
-# Copiar arquivos de dependências
-COPY package*.json ./
+# Copiar arquivos do Gradle primeiro para aproveitar cache
+COPY gradlew .
+COPY gradle ./gradle
+COPY build.gradle settings.gradle ./
 
-# Instalar dependências
-RUN npm install
+# Garantir permissao de execucao no wrapper
+RUN chmod +x gradlew
 
-# Copiar código da aplicação
-COPY . .
+# Copiar codigo-fonte e gerar o .jar
+COPY src ./src
+RUN ./gradlew bootJar --no-daemon
 
-# Compilar a aplicação
-RUN npm run build
+# Etapa 2: executar apenas com JRE
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+COPY --from=build /app/build/libs/*.jar app.jar
 
 # Expor porta
-EXPOSE 3000
+EXPOSE 8080
 
 # Comando para iniciar em produção
-CMD ["npm", "run", "start:prod"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+
+**.dockerignore:**
+```dockerignore
+build/
+.gradle/
+.git/
+.idea/
+.vscode/
+*.log
 ```
 
 **Build e Execução:**
 ```bash
 # Construir a imagem
-docker build -t api-nestjs:latest .
+docker build -t api-spring:latest .
 
 # Executar o container
-docker run -d -p 3000:3000 --name api-nestjs api-nestjs
+docker run -d -p 8080:8080 --name api-spring api-spring:latest
 
-# Testar a API
-curl http://localhost:3000
-curl http://localhost:3000/health
+# Testar a API no navegador
+# Abra:
+# http://localhost:8080
+# http://localhost:8080/health
 ```
 
-**Estrutura de arquivos (após criar com NestJS CLI):**
+**Estrutura de arquivos (após criar com Spring Initializr):**
 ```
-api-nestjs-docker/
+api-spring-docker/
 ├── src/
-│   ├── main.ts          ← Modificado
-│   ├── app.module.ts    ← Gerado automaticamente
-│   ├── app.controller.ts ← Modificado
-│   └── app.service.ts   ← Modificado
-├── package.json         ← Gerado automaticamente
-├── Dockerfile           ← Criado por você
-└── .dockerignore        ← Criado por você
+│   └── main/
+│       ├── java/
+│       │   └── br/edu/upf/apispringdocker/
+│       │       ├── ApiSpringDockerApplication.java ← Gerado automaticamente
+│       │       └── DockerController.java           ← Criado por você
+│       └── resources/
+│           └── application.properties              ← Modificado
+├── build.gradle                                 ← Gerado automaticamente
+├── settings.gradle                              ← Gerado automaticamente
+├── gradlew                                      ← Gerado automaticamente
+├── gradle/                                      ← Gerado automaticamente
+├── Dockerfile                                   ← Criado por você
+└── .dockerignore                                ← Criado por você
 ```
 
 
@@ -426,13 +479,13 @@ Interface web para gerenciar ambientes Docker em produção.
 ## Quando Usar Docker?
 
 ### ✅ Use Docker quando:
-- Desenvolvimento de APIs modernas (NestJS, Express, Fastify)
+- Desenvolvimento de APIs modernas (Spring Boot, Quarkus, Micronaut)
 - Microserviços
 - CI/CD pipelines
 - Aplicações stateless
 - Escalabilidade horizontal é importante
 - Portabilidade entre ambientes é crítica
-- Desenvolvimento com TypeScript/JavaScript
+- Desenvolvimento com Java e outras stacks de back-end
 
 ### ❌ Evite Docker quando:
 - Aplicações com GUI complexa

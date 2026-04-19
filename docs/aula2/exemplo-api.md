@@ -1,384 +1,672 @@
-# Aula 2 — Exemplo Prático de API com NestJS
+# Aula 2 — Exemplo Prático de API com Spring Boot e MongoDB
 
 ## Objetivo da Aula
 
-Nesta aula vamos **colocar em prática** os conceitos vistos sobre APIs na aula anterior.  
-A ideia é construir uma **API simples**, usando **NestJS** e **Prisma**, conectada a um banco **PostgreSQL**.  
+Nesta aula vamos **colocar em prática** os conceitos vistos sobre APIs.
+A ideia é construir uma **API simples**, usando **Java**, **Spring Boot** e **MongoDB**.
 Essa API permitirá **criar, listar, buscar, atualizar e deletar usuários** — um CRUD básico.
 
 ## Stack Utilizada
 
-- **NestJS** → Framework Node.js para back-end modular e escalável.  
-- **Prisma** → ORM moderno, facilita o acesso ao banco de dados.  
-- **PostgreSQL** → Banco relacional usado na aplicação.  
-- **Docker** *(opcional)* → Para subir o banco rapidamente.
+- **Java 21** → linguagem usada para construir a API.
+- **Spring Boot** → framework para criar aplicações Java com configuração simplificada.
+- **Spring Web** → módulo para criar endpoints HTTP/REST.
+- **Spring Data MongoDB** → integração entre Spring Boot e MongoDB.
+- **Validation** → validação dos dados enviados nas requisições.
+- **Lombok** → reduz código repetitivo como getters, setters e construtores.
+- **Swagger/OpenAPI** → documentação visual e testável da API.
+- **springdoc-openapi** → biblioteca que integra Swagger UI com Spring Boot.
+- **MongoDB** → banco NoSQL orientado a documentos.
+- **Docker** → usado para subir o MongoDB rapidamente.
+- **Gradle Wrapper** → ferramenta de build gerada junto com o projeto.
+
+## Antes de Começar
+
+Você precisa ter instalado:
+
+- **Java JDK 21**
+- **Docker Desktop** ou **Docker Engine**
+- **Editor de código**: IntelliJ IDEA, VS Code ou Eclipse
+- **Navegador web**
+- **Postman** ou **Insomnia** para testar requisições `POST`, `PUT` e `DELETE`
+
+Links úteis:
+
+- Java JDK 21: [https://adoptium.net/temurin/releases/?version=21](https://adoptium.net/temurin/releases/?version=21)
+- Docker Desktop: [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
+- IntelliJ IDEA Community: [https://www.jetbrains.com/idea/download/](https://www.jetbrains.com/idea/download/)
+- Visual Studio Code: [https://code.visualstudio.com/](https://code.visualstudio.com/)
+- Postman: [https://www.postman.com/downloads/](https://www.postman.com/downloads/)
+- Insomnia: [https://insomnia.rest/download](https://insomnia.rest/download)
+
+> O Gradle será gerado junto com o projeto pelo Spring Initializr, usando o Gradle Wrapper. Não é obrigatório instalar Gradle manualmente para esta aula.
+
+## Padrão de Código da Aula
+
+Para manter o código mais limpo:
+
+- Use `var` para variáveis locais quando o tipo estiver claro pelo lado direito da atribuição.
+- Use **early return** para evitar `if` aninhado desnecessário.
+- Separe regras auxiliares em métodos privados quando isso deixar o service mais legível.
+- Deixe o controller fino: ele recebe HTTP e delega a regra para o service.
 
 ## Estrutura da Aplicação
 
 ```
 minha-api/
-├─ prisma/
-│  └─ schema.prisma
 ├─ src/
-│  ├─ app.module.ts
-│  ├─ main.ts
-│  └─ users/
-│     ├─ dto/
-│     │  └─ create-user.dto.ts
-│     ├─ users.controller.ts
-│     ├─ users.service.ts
-│     └─ users.module.ts
-├─ .env
-├─ package.json
+│  └─ main/
+│     ├─ java/
+│     │  └─ br/edu/upf/minhaapi/
+│     │     ├─ MinhaApiApplication.java
+│     │     ├─ config/
+│     │     │  └─ OpenApiConfig.java
+│     │     └─ users/
+│     │        ├─ User.java
+│     │        ├─ UserRepository.java
+│     │        ├─ UserService.java
+│     │        ├─ UserController.java
+│     │        ├─ CreateUserRequest.java
+│     │        └─ UpdateUserRequest.java
+│     └─ resources/
+│        └─ application.properties
+├─ build.gradle
+├─ settings.gradle
+├─ gradlew
+├─ gradle/
 ├─ Dockerfile
 └─ docker-compose.yml
 ```
 
-## Passo 1 — Instalar PostgreSQL
+## Passo 1 — Subir o MongoDB com Docker
 
-### Opção 1: Docker (Recomendado)
+Execute o MongoDB localmente usando Docker:
 
 ```bash
-# Baixar e executar PostgreSQL na porta 5433
-docker run --name postgres-api -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=minha_api -p 5433:5432 -d postgres:15
+docker run --name mongo-api \
+  -p 27017:27017 \
+  -d mongo:7
+```
 
-# Verificar se está rodando
+Verifique se o container está rodando:
+
+```bash
 docker ps
 ```
 
-### Opção 2: Instalação Local
+Comandos úteis:
 
-**Ubuntu/Debian:**
 ```bash
-sudo apt update
-sudo apt install postgresql postgresql-contrib
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
+# Parar o MongoDB
+docker stop mongo-api
 
-# Criar usuário e banco
-sudo -u postgres psql
-CREATE USER postgres WITH PASSWORD 'postgres';
-CREATE DATABASE minha_api OWNER postgres;
-GRANT ALL PRIVILEGES ON DATABASE minha_api TO postgres;
-\q
+# Iniciar novamente
+docker start mongo-api
 
-# Configurar para rodar na porta 5433
-sudo nano /etc/postgresql/*/main/postgresql.conf
-# Alterar: port = 5433
-sudo systemctl restart postgresql
+# Ver logs
+docker logs mongo-api
 ```
 
-**macOS (Homebrew):**
-```bash
-brew install postgresql
-brew services start postgresql
-createdb minha_api
-```
+## Passo 2 — Criar o Projeto no Spring Initializr
 
-**Windows:**
-```bash
-# Baixar do site oficial: https://www.postgresql.org/download/windows/
-# Durante instalação, configurar porta 5433
-```
+Abra o site [https://start.spring.io/](https://start.spring.io/) no navegador.
 
-## Passo 2 — Criar o Projeto
+Configure o projeto com estas opções:
+
+| Campo | Valor |
+|-------|-------|
+| **Project** | Gradle - Groovy |
+| **Language** | Java |
+| **Spring Boot** | 3.5.x |
+| **Group** | `br.edu.upf` |
+| **Artifact** | `minha-api` |
+| **Name** | `minha-api` |
+| **Description** | `API Spring Boot com MongoDB` |
+| **Package name** | `br.edu.upf.minhaapi` |
+| **Packaging** | Jar |
+| **Java** | 21 |
+
+Em **Dependencies**, clique em **Add Dependencies** e adicione:
+
+- **Spring Web**
+- **Spring Data MongoDB**
+- **Validation**
+- **Lombok**
+
+Depois clique em **Generate** para baixar o arquivo `.zip` do projeto.
+
+> O Swagger será adicionado manualmente no `build.gradle`, porque ele usa a biblioteca `springdoc-openapi`.
+
+## Passo 3 — Descompactar e Abrir o Projeto
 
 ```bash
-npm i -g @nestjs/cli
-nest new minha-api
+# Descompactar o projeto
+unzip minha-api.zip -d minha-api
+
+# Entrar no diretório
 cd minha-api
-
-npm install @prisma/client
-npm install -D prisma
-npm install pg
-npm install @nestjs/swagger swagger-ui-express
 ```
 
-Crie um arquivo `.env` com o conteúdo:
+Abra a pasta `minha-api` no seu editor de código.
 
+## Passo 4 — Configurar a Conexão com o MongoDB
+
+Edite o arquivo `src/main/resources/application.properties`:
+
+```properties
+spring.application.name=minha-api
+server.port=${PORT:8080}
+spring.data.mongodb.uri=${MONGODB_URI:mongodb://localhost:27017/minha_api}
+springdoc.swagger-ui.path=/swagger-ui.html
 ```
-DATABASE_URL="postgresql://postgres:postgres@localhost:5433/minha_api?schema=public"
-```
 
+Essa configuração usa:
 
-## Passo 3 — Criar o Modelo Prisma
+- `localhost:27017` quando a API roda direto na sua máquina.
+- `MONGODB_URI` quando a API roda em container ou ambiente de produção.
+- `minha_api` como nome do banco.
+- `/swagger-ui.html` como endereço da documentação visual da API.
 
-`prisma/schema.prisma`:
+## Passo 5 — Adicionar Swagger no Gradle
 
-```prisma
-generator client {
-  provider = "prisma-client-js"
+Abra o arquivo `build.gradle` e adicione a dependência do `springdoc-openapi` dentro do bloco `dependencies`.
+
+O trecho de configurações e dependências ficará parecido com este:
+
+```groovy
+configurations {
+  compileOnly {
+    extendsFrom annotationProcessor
+  }
 }
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+dependencies {
+  implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+  implementation 'org.springframework.boot:spring-boot-starter-validation'
+  implementation 'org.springframework.boot:spring-boot-starter-web'
+  implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17'
 
-model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  createdAt DateTime @default(now())
+  compileOnly 'org.projectlombok:lombok'
+  annotationProcessor 'org.projectlombok:lombok'
+
+  testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 ```
 
-Rode os comandos:
+Essa dependência libera dois endereços importantes:
+
+- `http://localhost:8080/swagger-ui.html` → tela visual para testar a API.
+- `http://localhost:8080/v3/api-docs` → contrato OpenAPI em JSON.
+
+> Se o editor mostrar erro nos métodos gerados pelo Lombok, habilite **annotation processing** nas configurações da IDE.
+
+## Passo 6 — Configurar Informações do Swagger
+
+Crie a pasta `src/main/java/br/edu/upf/minhaapi/config`.
+
+Crie o arquivo `src/main/java/br/edu/upf/minhaapi/config/OpenApiConfig.java`:
+
+```java
+package br.edu.upf.minhaapi.config;
+
+import io.swagger.v3.oas.annotations.OpenAPIDefinition;
+import io.swagger.v3.oas.annotations.info.Info;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@OpenAPIDefinition(
+  info = @Info(
+    title = "Minha API",
+    version = "1.0",
+    description = "API de usuarios com Spring Boot e MongoDB"
+  )
+)
+public class OpenApiConfig {
+}
+```
+
+## Passo 7 — Criar o Modelo de Usuário
+
+Crie a pasta `src/main/java/br/edu/upf/minhaapi/users`.
+
+Crie o arquivo `src/main/java/br/edu/upf/minhaapi/users/User.java`:
+
+```java
+package br.edu.upf.minhaapi.users;
+
+import java.time.Instant;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+@Data
+@NoArgsConstructor
+@Document(collection = "users")
+public class User {
+  @Id
+  private String id;
+
+  private String name;
+
+  @Indexed(unique = true)
+  private String email;
+
+  private Instant createdAt = Instant.now();
+}
+```
+
+## Passo 8 — Criar os DTOs
+
+DTOs organizam os dados que entram na API.
+
+Crie o arquivo `src/main/java/br/edu/upf/minhaapi/users/CreateUserRequest.java`:
+
+```java
+package br.edu.upf.minhaapi.users;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+
+public record CreateUserRequest(
+  @NotBlank(message = "Nome e obrigatorio")
+  String name,
+
+  @NotBlank(message = "Email e obrigatorio")
+  @Email(message = "Email invalido")
+  String email
+) {}
+```
+
+Crie o arquivo `src/main/java/br/edu/upf/minhaapi/users/UpdateUserRequest.java`:
+
+```java
+package br.edu.upf.minhaapi.users;
+
+import jakarta.validation.constraints.Email;
+
+public record UpdateUserRequest(
+  String name,
+
+  @Email(message = "Email invalido")
+  String email
+) {}
+```
+
+## Passo 9 — Criar o Repository
+
+O repository é a camada que conversa com o MongoDB.
+
+Crie o arquivo `src/main/java/br/edu/upf/minhaapi/users/UserRepository.java`:
+
+```java
+package br.edu.upf.minhaapi.users;
+
+import java.util.Optional;
+import org.springframework.data.mongodb.repository.MongoRepository;
+
+public interface UserRepository extends MongoRepository<User, String> {
+  Optional<User> findByEmail(String email);
+}
+```
+
+## Passo 10 — Criar o Service
+
+O service concentra as regras da aplicação.
+
+Crie o arquivo `src/main/java/br/edu/upf/minhaapi/users/UserService.java`:
+
+```java
+package br.edu.upf.minhaapi.users;
+
+import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+@Service
+public class UserService {
+  private final UserRepository repository;
+
+  public UserService(UserRepository repository) {
+    this.repository = repository;
+  }
+
+  public User create(CreateUserRequest request) {
+    var existingUser = repository.findByEmail(request.email());
+
+    if (existingUser.isPresent()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Email ja cadastrado");
+    }
+
+    var user = new User();
+    user.setName(request.name());
+    user.setEmail(request.email());
+
+    return repository.save(user);
+  }
+
+  public List<User> findAll() {
+    return repository.findAll();
+  }
+
+  public User findOne(String id) {
+    return repository.findById(id)
+      .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario nao encontrado"));
+  }
+
+  public User update(String id, UpdateUserRequest request) {
+    var user = findOne(id);
+
+    updateName(user, request.name());
+    updateEmail(user, request.email());
+
+    return repository.save(user);
+  }
+
+  public void remove(String id) {
+    var user = findOne(id);
+    repository.delete(user);
+  }
+
+  private void updateName(User user, String name) {
+    if (name == null || name.isBlank()) {
+      return;
+    }
+
+    user.setName(name);
+  }
+
+  private void updateEmail(User user, String email) {
+    if (email == null || email.isBlank()) {
+      return;
+    }
+
+    var existingUser = repository.findByEmail(email);
+
+    if (existingUser.isEmpty()) {
+      user.setEmail(email);
+      return;
+    }
+
+    if (existingUser.get().getId().equals(user.getId())) {
+      user.setEmail(email);
+      return;
+    }
+
+    throw new ResponseStatusException(HttpStatus.CONFLICT, "Email ja cadastrado");
+  }
+}
+```
+
+## Passo 11 — Criar o Controller
+
+O controller expõe os endpoints HTTP da API.
+
+Crie o arquivo `src/main/java/br/edu/upf/minhaapi/users/UserController.java`:
+
+```java
+package br.edu.upf.minhaapi.users;
+
+import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/users")
+@Tag(name = "users", description = "Operacoes de usuarios")
+public class UserController {
+  private final UserService service;
+
+  public UserController(UserService service) {
+    this.service = service;
+  }
+
+  @PostMapping
+  @ResponseStatus(HttpStatus.CREATED)
+  @Operation(summary = "Criar usuario")
+  public User create(@Valid @RequestBody CreateUserRequest request) {
+    return service.create(request);
+  }
+
+  @GetMapping
+  @Operation(summary = "Listar usuarios")
+  public List<User> findAll() {
+    return service.findAll();
+  }
+
+  @GetMapping("/{id}")
+  @Operation(summary = "Buscar usuario por ID")
+  public User findOne(@PathVariable String id) {
+    return service.findOne(id);
+  }
+
+  @PutMapping("/{id}")
+  @Operation(summary = "Atualizar usuario")
+  public User update(@PathVariable String id, @Valid @RequestBody UpdateUserRequest request) {
+    return service.update(id, request);
+  }
+
+  @DeleteMapping("/{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @Operation(summary = "Deletar usuario")
+  public void remove(@PathVariable String id) {
+    service.remove(id);
+  }
+}
+```
+
+## Passo 12 — Rodar a API Localmente
+
+Com o MongoDB rodando no Docker, execute a API:
 
 ```bash
-npx prisma migrate dev --name init
-npx prisma generate
+./gradlew bootRun
 ```
 
-## Passo 4 — Criar o PrismaService
+A API ficará disponível em:
 
-### Gerar arquivos:
-
-```bash
-nest generate module prisma
-nest generate service prisma
+```text
+http://localhost:8080
 ```
 
-### Arquivos gerados:
+## Passo 13 — Testar a API
 
-`src/prisma/prisma.service.ts`:
+Use o Swagger, Postman ou Insomnia.
 
-```ts
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+### Acessar Swagger
 
-@Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
-  async onModuleInit() {
-    await this.$connect();
-  }
+Abra no navegador:
 
-  async onModuleDestroy() {
-    await this.$disconnect();
-  }
+```text
+http://localhost:8080/swagger-ui.html
+```
+
+No Swagger você pode:
+
+- Ver todos os endpoints disponíveis.
+- Testar `POST`, `GET`, `PUT` e `DELETE`.
+- Conferir os modelos de entrada e saída.
+- Ver os status HTTP esperados.
+
+### Criar Usuário
+
+**Método:** `POST`
+
+**URL:** `http://localhost:8080/users`
+
+**Body JSON:**
+
+```json
+{
+  "name": "Bruno",
+  "email": "bruno@example.com"
 }
 ```
 
-`src/prisma/prisma.module.ts`:
+### Listar Usuários
 
-```ts
-import { Global, Module } from '@nestjs/common';
-import { PrismaService } from './prisma.service';
+**Método:** `GET`
 
-@Global()
-@Module({
-  providers: [PrismaService],
-  exports: [PrismaService],
-})
-export class PrismaModule {}
-```
+**URL:** `http://localhost:8080/users`
 
----
+Também é possível abrir essa URL no navegador.
 
-## Passo 5 — Módulo de Usuários
+### Buscar Usuário por ID
 
-### Gerar arquivos:
+**Método:** `GET`
 
-```bash
-nest generate resource users
-# Escolha: REST API, Yes para CRUD entry points
-```
+**URL:** `http://localhost:8080/users/ID_DO_USUARIO`
 
-### Arquivos gerados:
+Troque `ID_DO_USUARIO` pelo `id` retornado ao criar ou listar usuários.
 
-### DTO — `src/users/dto/create-user.dto.ts`
+### Atualizar Usuário
 
-```ts
-import { ApiProperty } from '@nestjs/swagger';
+**Método:** `PUT`
 
-export class CreateUserDto {
-  @ApiProperty({ description: 'Nome do usuário', example: 'João Silva' })
-  name: string;
+**URL:** `http://localhost:8080/users/ID_DO_USUARIO`
 
-  @ApiProperty({ description: 'Email do usuário', example: 'joao@example.com' })
-  email: string;
+**Body JSON:**
+
+```json
+{
+  "name": "Bruno Silva",
+  "email": "bruno.silva@example.com"
 }
 ```
 
-### Service — `src/users/users.service.ts`
+### Deletar Usuário
 
-```ts
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreateUserDto } from './dto/create-user.dto';
+**Método:** `DELETE`
 
-@Injectable()
-export class UsersService {
-  constructor(private prisma: PrismaService) {}
+**URL:** `http://localhost:8080/users/ID_DO_USUARIO`
 
-  create(data: CreateUserDto) {
-    return this.prisma.user.create({ data });
-  }
+Se a operação funcionar, a API retorna status `204 No Content`.
 
-  findAll() {
-    return this.prisma.user.findMany({ orderBy: { createdAt: 'desc' } });
-  }
+## Passo 14 — Dockerizar a API
 
-  findOne(id: number) {
-    return this.prisma.user.findUnique({ where: { id } });
-  }
+Crie o arquivo `Dockerfile` na raiz do projeto:
 
-  update(id: number, data: Partial<CreateUserDto>) {
-    return this.prisma.user.update({ where: { id }, data });
-  }
+```dockerfile
+# Etapa 1: construir a aplicacao com Gradle Wrapper e JDK 21
+FROM eclipse-temurin:21-jdk-alpine AS build
 
-  remove(id: number) {
-    return this.prisma.user.delete({ where: { id } });
-  }
-}
+WORKDIR /app
+
+COPY gradlew .
+COPY gradle ./gradle
+COPY build.gradle settings.gradle ./
+
+RUN chmod +x gradlew
+
+COPY src ./src
+RUN ./gradlew bootJar --no-daemon
+
+# Etapa 2: executar apenas com JRE
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+COPY --from=build /app/build/libs/*.jar app.jar
+
+EXPOSE 8080
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
 ```
 
-### Controller — `src/users/users.controller.ts`
+Crie o arquivo `.dockerignore`:
 
-```ts
-import { Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-
-@ApiTags('users')
-@Controller('users')
-export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
-
-  @Post()
-  @ApiOperation({ summary: 'Criar usuário' })
-  @ApiResponse({ status: 201, description: 'Usuário criado com sucesso' })
-  create(@Body() dto: CreateUserDto) {
-    return this.usersService.create(dto);
-  }
-
-  @Get()
-  @ApiOperation({ summary: 'Listar todos os usuários' })
-  @ApiResponse({ status: 200, description: 'Lista de usuários' })
-  findAll() {
-    return this.usersService.findAll();
-  }
-
-  @Get(':id')
-  @ApiOperation({ summary: 'Buscar usuário por ID' })
-  @ApiResponse({ status: 200, description: 'Usuário encontrado' })
-  @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.usersService.findOne(id);
-  }
-
-  @Put(':id')
-  @ApiOperation({ summary: 'Atualizar usuário' })
-  @ApiResponse({ status: 200, description: 'Usuário atualizado com sucesso' })
-  @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: Partial<CreateUserDto>) {
-    return this.usersService.update(id, dto);
-  }
-
-  @Delete(':id')
-  @ApiOperation({ summary: 'Deletar usuário' })
-  @ApiResponse({ status: 200, description: 'Usuário deletado com sucesso' })
-  @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.usersService.remove(id);
-  }
-}
+```dockerignore
+build/
+.gradle/
+.git/
+.idea/
+.vscode/
+*.log
 ```
 
----
+## Passo 15 — Criar o Docker Compose
 
-## Passo 6 — AppModule e Bootstrap
+Crie o arquivo `docker-compose.yml` na raiz do projeto:
 
-`src/app.module.ts`:
+```yaml
+services:
+  mongo:
+    image: mongo:7
+    container_name: mongo-api
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
 
-```ts
-import { Module } from '@nestjs/common';
-import { PrismaModule } from './prisma/prisma.module';
-import { UsersModule } from './users/users.module';
+  api:
+    build: .
+    container_name: minha-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/minha_api
+    depends_on:
+      - mongo
 
-@Module({
-  imports: [PrismaModule, UsersModule],
-  controllers: [AppController],
-  providers: [AppService],
-})
-export class AppModule {}
+volumes:
+  mongo_data:
 ```
 
-`src/main.ts`:
-
-```ts
-import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AppModule } from './app.module';
-
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  
-  // Configuração do Swagger
-  const config = new DocumentBuilder()
-    .setTitle('Minha API')
-    .setDescription('API de exemplo com NestJS e Prisma')
-    .setVersion('1.0')
-    .addTag('users')
-    .build();
-  
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
-  
-  await app.listen(3000);
-  console.log('Server running on http://localhost:3000');
-  console.log('Swagger docs available at http://localhost:3000/api');
-}
-bootstrap();
-```
-
-## Passo 7 — Testando a API
-
-### Acessar Documentação Swagger
-
-Abra seu navegador e acesse: **http://localhost:3000/api**
-
-Aqui você pode:
-- Ver todos os endpoints disponíveis
-- Testar a API diretamente no navegador
-- Ver exemplos de requisições e respostas
-
-### Testando via cURL
-
-Criar usuário:
+Execute:
 
 ```bash
-curl -X POST http://localhost:3000/users -H "Content-Type: application/json" -d '{"name":"Bruno","email":"bruno@example.com"}'
+docker compose up --build
 ```
 
-Listar usuários:
+A API continuará disponível em:
+
+```text
+http://localhost:8080/users
+```
+
+O Swagger continuará disponível em:
+
+```text
+http://localhost:8080/swagger-ui.html
+```
+
+Para parar tudo:
 
 ```bash
-curl http://localhost:3000/users
+docker compose down
 ```
-
-Buscar usuário por ID:
-
-```bash
-curl http://localhost:3000/users/1
-```
-
----
 
 ## Dicas Importantes
 
-- Centralize a conexão com o banco via `PrismaService`.  
-- Use DTOs para organizar dados de entrada e saída.  
-- Valide payloads para evitar dados inválidos.  
-- Uma API bem escrita é base para qualquer arquitetura escalável.
+- Use o `Controller` para receber requisições HTTP.
+- Use o `Service` para concentrar regras de negócio.
+- Use o `Repository` para acessar o MongoDB.
+- Use DTOs para controlar os dados aceitos pela API.
+- Valide os dados de entrada antes de salvar no banco.
+- Em MongoDB, o `id` normalmente é uma `String`, não um número sequencial.
 
 ## Referências
 
-- [Documentação NestJS](https://docs.nestjs.com/)  
-- [Documentação Prisma](https://www.prisma.io/docs/)  
-- [API com NestJS + Prisma (exemplos)](https://docs.nestjs.com/recipes/prisma)
+- [Spring Initializr](https://start.spring.io/)
+- [Documentação Spring Boot](https://spring.io/projects/spring-boot)
+- [Documentação Spring Data MongoDB](https://spring.io/projects/spring-data-mongodb)
+- [Documentação MongoDB](https://www.mongodb.com/docs/)
 
 ---
 
-**Fim da Aula 2** — Agora você tem uma **API funcional** e um exemplo prático para evoluir com novos conceitos nas próximas aulas.
+**Fim da Aula 2** — Agora você tem uma **API funcional com Spring Boot e MongoDB** para evoluir nas próximas aulas.
