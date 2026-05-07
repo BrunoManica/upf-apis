@@ -123,10 +123,7 @@ Vamos começar pelo banco porque a API vai precisar dele para salvar usuários.
 Execute:
 
 ```bash
-docker run --name mongo-api \
-  -p 27017:27017 \
-  -v mongo_api_data:/data/db \
-  -d mongo:7
+docker run --name mongo-api -p 27017:27017 -d mongo:7
 ```
 
 Esse comando cria um container chamado `mongo-api`, expõe a porta `27017` e usa um volume chamado `mongo_api_data` para manter os dados mesmo se o container for parado.
