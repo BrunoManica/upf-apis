@@ -1,836 +1,747 @@
-# Princípios SOLID: Fundamentos da Programação Orientada a Objetos
+# Princípios SOLID em Java 17 com Spring Boot
 
-## O que é SOLID?
+## Objetivo da aula
 
-SOLID é um acrônimo que representa **5 princípios fundamentais** da Programação Orientada a Objetos (POO). Estes princípios foram criados para ajudar desenvolvedores a escrever código mais limpo, manutenível e escalável.
+Nesta aula vamos entender os cinco princípios SOLID usando Java 17.
 
-### Origem dos Princípios SOLID
+A ideia não é decorar siglas. A ideia é olhar para um código de pagamento que funciona, mas ficou difícil de manter, e depois melhorar esse código aos poucos.
 
-Os princípios SOLID foram introduzidos por **Robert C. Martin** (conhecido como "Uncle Bob") em 1995, no artigo "The Principles of OoD" (Object-Oriented Design). Em 2002, ele consolidou esses princípios no livro "Agile Software Development, Principles, Patterns, and Practices".
+Vamos usar o mesmo domínio do tutorial da Payment API:
 
-### Por que SOLID é Importante?
+- pagamento por PIX
+- pagamento por cartão de crédito
+- pagamento por boleto
+- persistência em MongoDB
+- API REST com Spring Boot
 
-Imagine construir uma casa. Se você não seguir princípios básicos de arquitetura (fundação sólida, estrutura bem planejada, materiais adequados), a casa pode desabar ou ser muito difícil de reformar. O mesmo acontece com software!
+## Resultado final
 
-**Código sem SOLID**:
+Ao final da aula, você vai conseguir identificar problemas como:
 
-- Difícil de manter e modificar
-- Propenso a bugs
-- Difícil de testar
-- Acoplado demais (mudança em uma parte quebra outras)
+- classe fazendo coisa demais
+- muitos `if` e `else` para escolher comportamento
+- dependência direta de implementação concreta
+- interfaces grandes demais
+- código difícil de testar
 
-**Código com SOLID**:
+E vai conseguir melhorar isso usando:
 
-- Fácil de manter e expandir
-- Menos bugs
-- Fácil de testar
-- Componentes independentes
+- services menores
+- interfaces simples
+- strategy pattern
+- injeção de dependência pelo construtor
+- Spring Data MongoDB separado da regra de negócio
 
-## Os 5 Princípios SOLID
+## Contexto
 
-### 1. Single Responsibility Principle (SRP) - Princípio da Responsabilidade Única
+Em uma API real, é comum começar com uma classe simples:
 
-> **"Uma classe deve ter apenas uma razão para mudar"**
-
-#### Analogia do Mundo Real: Restaurante
-
-Imagine um restaurante onde o mesmo funcionário faz **tudo**:
-
-- Cozinha os pratos
-- Atende os clientes
-- Lava a louça
-- Limpa as mesas
-- Cobra as contas
-- Gerencia o estoque
-
-**Problema**: Se o funcionário ficar doente, o restaurante para! E se você quiser melhorar o atendimento, precisa mexer no mesmo código que cozinha.
-
-**Solução SOLID**: 
-
-Cada funcionário tem **UMA** responsabilidade:
-
-- **Chef**: Só cozinha
-- **Garçom**: Só atende
-- **Lavador**: Só lava louça
-- **Caixa**: Só cobra
-
-#### Exemplo de Violação (Código Ruim)
-
-```typescript
-// VIOLA SRP: Uma classe faz muitas coisas
-export class LegacyPaymentService {
-  async createPayment(createPaymentDto: CreateLegacyPaymentDto) {
-    // Validação
-    if (!createPaymentDto.customerName) {
-      throw new Error('Nome do cliente é obrigatório');
-    }
-
-    // Processamento
-    let processedPayment;
-    if (createPaymentDto.type === 'CREDIT_CARD') {
-      processedPayment = await this.processCreditCard(createPaymentDto);
-    } else if (createPaymentDto.type === 'PIX') {
-      processedPayment = await this.processPix(createPaymentDto);
-    }
-
-    // Cálculo e persistência
-    const fee = this.calculateFee(createPaymentDto.amount, createPaymentDto.type);
-    const status = this.determineStatus(createPaymentDto.amount, createPaymentDto.type);
-    const payment = await this.prisma.payment.create({ data: formattedData });
-
-    // Notificação e log
-    await this.sendEmail(payment);
-    console.log(`Pagamento ${payment.id} criado com sucesso`);
-
-    return payment;
-  }
+```java
+public Payment createPayment(CreatePaymentRequest request) {
+    // valida
+    // escolhe tipo de pagamento
+    // calcula taxa
+    // salva no banco
+    // envia notificacao
+    // monta resposta
 }
 ```
 
-**Problemas**:
+No começo isso parece prático. O problema aparece quando o sistema cresce.
 
-- Se mudar validação, pode quebrar processamento
-- Se mudar regras de negócio, pode afetar email
-- Difícil de testar cada responsabilidade separadamente
-- Difícil de reutilizar partes do código
+Imagine que agora o negócio precisa adicionar débito, PayPal, criptomoeda, estorno, auditoria e antifraude. Se tudo estiver dentro da mesma classe, cada mudança encosta em código antigo. Isso aumenta a chance de quebrar algo que já estava funcionando.
 
-#### Exemplo de Aplicação Correta (Código Bom)
+SOLID ajuda justamente nesse ponto: criar código que aceita mudança com menos dor.
 
-```typescript
-// APLICA SRP: Cada classe tem uma responsabilidade
+## Explicação conceitual
 
-export class PixService {
-  async process(valor: number, metadados: Record<string, unknown>) {
-    return {
-      idTransacao: this.gerarIdTransacao(),
-      status: 'PROCESSANDO',
-      dadosAdicionais: { /* dados do PIX */ }
-    };
-  }
-}
+SOLID é um conjunto de cinco princípios de programação orientada a objetos:
 
-export class PaymentService {
-  constructor(
-    private pixService: PixService,
-    private repositorio: PaymentRepository
-  ) {}
+- **S**: Single Responsibility Principle
+- **O**: Open/Closed Principle
+- **L**: Liskov Substitution Principle
+- **I**: Interface Segregation Principle
+- **D**: Dependency Inversion Principle
 
-  async criarPagamento(dados: CriarPagamentoDto) {
-    const pagamentoProcessado = await this.pixService.process(dados.valor, dados.metadados);
-    return await this.repositorio.criar({ /* dados */ });
-  }
+Eles não obrigam você a criar arquitetura sofisticada. Em uma API Spring Boot, muitas vezes SOLID aparece em decisões simples:
+
+- controller só recebe HTTP e delega
+- service concentra regra de negócio
+- repository cuida do MongoDB
+- DTO separa entrada e saída da API
+- interface aparece quando existe mais de uma implementação real
+
+## Setup inicial
+
+Os exemplos desta aula usam Java 17 e Spring Boot. O projeto prático do tutorial usa:
+
+- Java 17
+- Gradle
+- Spring Web
+- Spring Data MongoDB
+- Bean Validation
+- Springdoc OpenAPI
+- Docker para subir o MongoDB
+
+## Passo a passo
+
+### 1. Single Responsibility Principle
+
+O princípio da responsabilidade única diz:
+
+> Uma classe deve ter apenas uma razão para mudar.
+
+Isso não significa que uma classe só pode ter um método. Significa que ela deve cuidar de um assunto só.
+
+#### Código legado sem SRP
+
+```java
+package br.edu.upf.paymentapi.legacy;
+
+import br.edu.upf.paymentapi.model.Payment;
+import br.edu.upf.paymentapi.repository.PaymentRepository;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
+
+@Service
+public class LegacyPaymentService {
+
+    private final PaymentRepository paymentRepository;
+
+    public LegacyPaymentService(PaymentRepository paymentRepository) {
+        this.paymentRepository = paymentRepository;
+    }
+
+    public Payment createPayment(CreateLegacyPaymentRequest request) {
+        if (request.customerName() == null || request.customerName().isBlank()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Nome do cliente e obrigatorio");
+        }
+
+        if (request.amount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(BAD_REQUEST, "Valor deve ser maior que zero");
+        }
+
+        Map<String, Object> metadata = new HashMap<>();
+
+        if ("PIX".equals(request.type())) {
+            metadata.put("qrCode", "pix-" + System.currentTimeMillis());
+            metadata.put("pixKey", request.pixKey());
+        } else if ("CREDIT_CARD".equals(request.type())) {
+            metadata.put("cardNumber", maskCard(request.cardNumber()));
+            metadata.put("processor", detectCardProcessor(request.cardNumber()));
+        } else if ("BOLETO".equals(request.type())) {
+            metadata.put("boletoNumber", "34191.79001 01043.510047 91020.150008 1");
+            metadata.put("dueDate", request.dueDate());
+        } else {
+            throw new ResponseStatusException(BAD_REQUEST, "Tipo de pagamento nao suportado");
+        }
+
+        BigDecimal fee = calculateFee(request.amount(), request.type());
+        String status = determineStatus(request.amount(), request.type());
+
+        Payment payment = new Payment();
+        payment.setType(request.type());
+        payment.setAmount(request.amount().add(fee));
+        payment.setStatus(status);
+        payment.setCustomerName(request.customerName().toUpperCase());
+        payment.setCustomerEmail(request.customerEmail().toLowerCase());
+        payment.setMetadata(metadata);
+        payment.setCreatedAt(LocalDateTime.now());
+        payment.setUpdatedAt(LocalDateTime.now());
+
+        Payment savedPayment = paymentRepository.save(payment);
+
+        System.out.println("Email enviado para " + savedPayment.getCustomerEmail());
+        System.out.println("Pagamento criado: " + savedPayment.getId());
+
+        return savedPayment;
+    }
+
+    private BigDecimal calculateFee(BigDecimal amount, String type) {
+        if ("CREDIT_CARD".equals(type)) {
+            return amount.multiply(new BigDecimal("0.03"));
+        }
+        if ("BOLETO".equals(type)) {
+            return new BigDecimal("2.50");
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private String determineStatus(BigDecimal amount, String type) {
+        if (amount.compareTo(new BigDecimal("10000")) > 0) {
+            return "PENDING";
+        }
+        return "APPROVED";
+    }
+
+    private String maskCard(String cardNumber) {
+        return "************" + cardNumber.substring(cardNumber.length() - 4);
+    }
+
+    private String detectCardProcessor(String cardNumber) {
+        if (cardNumber.startsWith("4")) {
+            return "Visa";
+        }
+        if (cardNumber.startsWith("5")) {
+            return "Mastercard";
+        }
+        return "Unknown";
+    }
 }
 ```
 
-**Benefícios**:
+Esse service faz muitas coisas:
 
-- Cada classe tem uma responsabilidade clara
-- Fácil de testar cada parte separadamente
-- Fácil de modificar uma responsabilidade sem afetar outras
-- Código mais legível e organizado
+- valida dados
+- processa PIX, cartão e boleto
+- calcula taxa
+- decide status
+- monta documento para o MongoDB
+- salva no banco
+- simula envio de email
+- escreve log no console
 
----
+Se mudar a regra de taxa, mexemos nessa classe. Se mudar o envio de email, mexemos nessa classe. Se mudar o MongoDB, mexemos nessa classe. São muitas razões para mudar.
 
-### 2. Open/Closed Principle (OCP) - Princípio Aberto-Fechado
+#### Código melhor com SRP
 
-> **"Aberto para extensão, fechado para modificação"**
+```java
+package br.edu.upf.paymentapi.service;
 
-#### Analogia do Mundo Real: Receita de Bolo
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import br.edu.upf.paymentapi.model.Payment;
+import br.edu.upf.paymentapi.repository.PaymentRepository;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import org.springframework.stereotype.Service;
 
-Imagine uma **receita de bolo básica**:
+@Service
+public class PaymentService {
 
-- 2 xícaras de farinha
-- 1 xícara de açúcar
-- 3 ovos
-- 1 xícara de leite
+    private final PaymentProcessorResolver processorResolver;
+    private final PaymentRepository paymentRepository;
 
-**Problema**: Se você quiser fazer um bolo de chocolate, precisa **modificar** a receita original.
-
-**Solução SOLID**: 
-
-A receita base **não muda**, mas você pode **adicionar** ingredientes:
-
-- Receita base: sempre a mesma
-- Bolo de chocolate: adiciona cacau
-- Bolo de morango: adiciona morangos
-- Bolo de coco: adiciona coco
-
-#### Exemplo de Violação (Código Ruim)
-
-```typescript
-// VIOLA OCP: Precisa modificar código para adicionar novo tipo
-export class LegacyPaymentService {
-  async createPayment(createPaymentDto: CreateLegacyPaymentDto) {
-    let processedPayment;
-    
-    if (createPaymentDto.type === 'CREDIT_CARD') {
-      processedPayment = await this.processCreditCard(createPaymentDto);
-    } else if (createPaymentDto.type === 'PIX') {
-      processedPayment = await this.processPix(createPaymentDto);
-    } else if (createPaymentDto.type === 'BOLETO') {
-      processedPayment = await this.processBoleto(createPaymentDto);
-    } else if (createPaymentDto.type === 'PAYPAL') {
-      processedPayment = await this.processPayPal(createPaymentDto);
-    } else if (createPaymentDto.type === 'CRYPTO') {
-      processedPayment = await this.processCrypto(createPaymentDto);
+    public PaymentService(
+            PaymentProcessorResolver processorResolver,
+            PaymentRepository paymentRepository
+    ) {
+        this.processorResolver = processorResolver;
+        this.paymentRepository = paymentRepository;
     }
-    
-    return processedPayment;
-  }
+
+    public Payment createPayment(CreatePaymentRequest request) {
+        PaymentProcessor processor = processorResolver.resolve(request.type());
+        ProcessedPayment processedPayment = processor.process(request);
+
+        Payment payment = new Payment();
+        payment.setType(request.type());
+        payment.setAmount(request.amount().add(processor.calculateFee(request.amount())));
+        payment.setStatus(determineStatus(request.amount()));
+        payment.setCustomerName(request.customerName());
+        payment.setCustomerEmail(request.customerEmail());
+        payment.setMetadata(processedPayment.metadata());
+        payment.setCreatedAt(LocalDateTime.now());
+        payment.setUpdatedAt(LocalDateTime.now());
+
+        return paymentRepository.save(payment);
+    }
+
+    private String determineStatus(BigDecimal amount) {
+        if (amount.compareTo(new BigDecimal("10000")) > 0) {
+            return "PENDING";
+        }
+        return "APPROVED";
+    }
 }
 ```
 
-**Problemas**:
+Agora o service principal orquestra o caso de uso. Ele não sabe os detalhes de como gerar QR Code de PIX ou mascarar cartão.
 
-- Toda vez que adicionar novo tipo, preciso modificar código existente
-- Risco de quebrar funcionalidades existentes
-- Código fica cada vez maior e mais complexo
-- Difícil de testar todas as combinações
+### 2. Open/Closed Principle
 
-#### Exemplo de Aplicação Correta (Código Bom)
+O princípio aberto-fechado diz:
 
-```typescript
-// APLICA OCP: Strategy Pattern - adiciona sem modificar código
-export interface IPaymentStrategy {
-  process(valor: number, metadados: Record<string, unknown>): Promise<DadosProcessamentoPagamento>;
-  calcularTaxa(valor?: number): number;
-  obterTipo(): string;
-}
+> Aberto para extensão, fechado para modificação.
 
-export class PixService {
-  async process(valor: number, metadados: Record<string, unknown>) {
-    // Implementação PIX
-  }
-  calcularTaxa() { return 0; }
-  obterTipo() { return 'PIX'; }
-}
+Na prática, quando entra um novo tipo de pagamento, o ideal é adicionar uma nova classe, não aumentar um `if` gigante dentro do service principal.
 
-export class CreditCardService {
-  async process(valor: number, metadados: Record<string, unknown>) {
-    // Implementação Cartão
-  }
-  calcularTaxa(valor: number) { return valor * 0.03; }
-  obterTipo() { return 'CARTAO_CREDITO'; }
-}
+#### Código legado sem OCP
 
-export class PaymentService {
-  private estrategias: Map<string, IPaymentStrategy>;
-
-  constructor(
-    private servicoPix: PixService,
-    private servicoCartaoCredito: CreditCardService
-  ) {
-    this.estrategias = new Map();
-    this.estrategias.set('PIX', servicoPix);
-    this.estrategias.set('CARTAO_CREDITO', servicoCartaoCredito);
-  }
-
-  async criarPagamento(dadosPagamento: CriarPagamentoDto) {
-    // OCP: Busca estratégia sem if/else - código não muda!
-    const estrategia = this.estrategias.get(dadosPagamento.tipo);
-    return await estrategia.process(dadosPagamento.valor, dadosPagamento.metadados);
-  }
+```java
+if ("PIX".equals(request.type())) {
+    // processa PIX
+} else if ("CREDIT_CARD".equals(request.type())) {
+    // processa cartao
+} else if ("BOLETO".equals(request.type())) {
+    // processa boleto
+} else if ("PAYPAL".equals(request.type())) {
+    // processa PayPal
+} else if ("CRYPTO".equals(request.type())) {
+    // processa cripto
 }
 ```
 
-**Benefícios**:
+Esse código cresce toda vez que aparece um novo meio de pagamento.
 
-- Adiciono novos tipos sem modificar código existente
-- Código existente continua funcionando
-- Fácil de testar cada estratégia separadamente
-- Código mais limpo e organizado
+#### Código melhor com Strategy
 
----
+```java
+package br.edu.upf.paymentapi.service;
 
-### 3. Liskov Substitution Principle (LSP) - Princípio de Substituição de Liskov
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import java.math.BigDecimal;
 
-> **"Objetos de uma superclasse devem ser substituíveis por objetos de subclasses"**
+public interface PaymentProcessor {
 
-#### Analogia do Mundo Real: Funcionários e Cargos
+    String getType();
 
-Imagine uma empresa onde você tem **funcionários** que podem ocupar diferentes **cargos**:
+    ProcessedPayment process(CreatePaymentRequest request);
 
-- **Gerente**: Pode ser substituído por qualquer pessoa que "saiba gerenciar"
-- **Vendedor**: Pode ser substituído por qualquer pessoa que "saiba vender"
-- **Contador**: Pode ser substituído por qualquer pessoa que "saiba contabilizar"
-
-**Problema**: Se você contratar um "vendedor" que na verdade não sabe vender (só sabe fazer relatórios), ele não pode substituir um vendedor real!
-
-**Solução SOLID**: Todos os vendedores devem "implementar a interface de vendedor":
-
-- Saber apresentar produtos
-- Saber fechar vendas
-- Saber atender clientes
-- Saber fazer follow-up
-
-Qualquer pessoa que implemente essa interface pode substituir qualquer outro vendedor.
-
-#### Exemplo de Violação (Código Ruim)
-
-```typescript
-// VIOLA LSP: Subclasse não pode substituir superclasse corretamente
-export abstract class PaymentProcessor {
-  abstract process(valor: number): Promise<{ sucesso: boolean; taxa: number }>;
-  abstract calcularTaxa(valor: number): number;
-}
-
-export class PixProcessor extends PaymentProcessor {
-  async process(valor: number) {
-    // PIX sempre processa com sucesso
-    return { sucesso: true, taxa: 0 };
-  }
-  
-  calcularTaxa(valor: number) {
-    return 0; // PIX não tem taxa
-  }
-}
-
-export class CreditCardProcessor extends PaymentProcessor {
-  async process(valor: number) {
-    // Cartão pode falhar se valor for muito alto
-    if (valor > 10000) {
-      throw new Error('Valor muito alto para cartão'); // VIOLA LSP!
-    }
-    return { sucesso: true, taxa: this.calcularTaxa(valor) };
-  }
-  
-  calcularTaxa(valor: number) {
-    return valor * 0.03;
-  }
-}
-
-// Cliente que espera que TODOS os processadores funcionem igual
-export class PaymentService {
-  async processarPagamento(processor: PaymentProcessor, valor: number) {
-    // Espera que funcione sempre, mas CreditCardProcessor pode falhar!
-    const resultado = await processor.process(valor);
-    console.log(`Processado: ${resultado.sucesso}, Taxa: ${resultado.taxa}`);
-  }
+    BigDecimal calculateFee(BigDecimal amount);
 }
 ```
 
-**Problemas**:
+```java
+package br.edu.upf.paymentapi.service;
 
-- `CreditCardProcessor` não pode substituir `PaymentProcessor` em todos os contextos
-- Cliente espera que sempre funcione, mas cartão pode falhar
-- Viola o contrato da superclasse (deveria sempre processar)
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import java.math.BigDecimal;
+import java.util.Map;
+import org.springframework.stereotype.Service;
 
-#### Exemplo de Aplicação Correta (Código Bom)
+@Service
+public class PixPaymentProcessor implements PaymentProcessor {
 
-```typescript
-// APLICA LSP: Todas as subclasses podem substituir a superclasse
-
-export abstract class PaymentProcessor {
-  abstract process(valor: number): Promise<{ sucesso: boolean; taxa: number; motivo?: string }>;
-  abstract calcularTaxa(valor: number): number;
-  abstract validarValor(valor: number): { valido: boolean; motivo?: string };
-}
-
-export class PixProcessor extends PaymentProcessor {
-  async process(valor: number) {
-    const validacao = this.validarValor(valor);
-    if (!validacao.valido) {
-      return { sucesso: false, taxa: 0, motivo: validacao.motivo };
+    @Override
+    public String getType() {
+        return "PIX";
     }
-    return { sucesso: true, taxa: 0 };
-  }
-  
-  calcularTaxa(valor: number) {
-    return 0;
-  }
-  
-  validarValor(valor: number) {
-    if (valor <= 0) {
-      return { valido: false, motivo: 'Valor deve ser positivo' };
-    }
-    return { valido: true };
-  }
-}
 
-export class CreditCardProcessor extends PaymentProcessor {
-  async process(valor: number) {
-    const validacao = this.validarValor(valor);
-    if (!validacao.valido) {
-      return { sucesso: false, taxa: 0, motivo: validacao.motivo };
+    @Override
+    public ProcessedPayment process(CreatePaymentRequest request) {
+        return new ProcessedPayment(Map.of(
+                "pixKey", request.pixKey(),
+                "qrCode", "pix-" + System.currentTimeMillis()
+        ));
     }
-    return { sucesso: true, taxa: this.calcularTaxa(valor) };
-  }
-  
-  calcularTaxa(valor: number) {
-    return valor * 0.03;
-  }
-  
-  validarValor(valor: number) {
-    if (valor <= 0) {
-      return { valido: false, motivo: 'Valor deve ser positivo' };
-    }
-    if (valor > 10000) {
-      return { valido: false, motivo: 'Valor muito alto para cartão' };
-    }
-    return { valido: true };
-  }
-}
 
-// Cliente que funciona com QUALQUER processador
-export class PaymentService {
-  async processarPagamento(processor: PaymentProcessor, valor: number) {
-    // Agora funciona com qualquer processador - todos seguem o mesmo contrato
-    const resultado = await processor.process(valor);
-    console.log(`Processado: ${resultado.sucesso}, Taxa: ${resultado.taxa}`);
-    if (!resultado.sucesso) {
-      console.log(`Motivo: ${resultado.motivo}`);
+    @Override
+    public BigDecimal calculateFee(BigDecimal amount) {
+        return BigDecimal.ZERO;
     }
-  }
 }
 ```
 
-**Benefícios**:
+```java
+package br.edu.upf.paymentapi.service;
 
-- Qualquer processador pode substituir outro sem quebrar o código
-- Todos seguem o mesmo contrato (sempre retornam resultado, nunca lançam exceção)
-- Cliente funciona com qualquer implementação
-- Fácil de testar e estender
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
 
----
+@Component
+public class PaymentProcessorResolver {
 
-### 4. Interface Segregation Principle (ISP) - Princípio de Segregação de Interface
+    private final Map<String, PaymentProcessor> processors;
 
-> **"Clientes não devem depender de interfaces que não usam"**
-
-#### Analogia do Mundo Real: Controle Remoto
-
-Imagine um **controle remoto gigante** com 100 botões:
-
-- Botão de ligar TV
-- Botão de volume
-- Botão de canal
-- Botão de lavar roupa
-- Botão de ligar ar condicionado
-- Botão de abrir portão
-- Botão de ligar fogão
-- ... (94 botões a mais)
-
-**Problema**: Você só quer assistir TV, mas precisa carregar um controle gigante com 100 botões!
-
-**Solução SOLID**: **Controles específicos**:
-
-- **Controle da TV**: só botões de TV
-- **Controle do ar**: só botões de ar condicionado
-- **Controle do portão**: só botão de abrir/fechar
-
-#### Exemplo de Violação (Código Ruim)
-
-```typescript
-// VIOLA ISP: Interface com muitos métodos
-export interface IPaymentService {
-  processPayment(valor: number, tipo: string): Promise<any>;
-  calculateFee(valor: number, tipo: string): number;
-  sendEmail(to: string, subject: string, body: string): Promise<void>;
-  sendSMS(phone: string, message: string): Promise<void>;
-  savePayment(payment: any): Promise<any>;
-  findPayment(id: string): Promise<any>;
-  updatePayment(id: string, data: any): Promise<any>;
-  deletePayment(id: string): Promise<void>;
-  validateEmail(email: string): boolean;
-  validatePhone(phone: string): boolean;
-  validateCreditCard(card: string): boolean;
-  generateReport(startDate: Date, endDate: Date): Promise<any>;
-  exportToExcel(data: any[]): Promise<Buffer>;
-  exportToPDF(data: any[]): Promise<Buffer>;
-}
-
-export class PaymentProcessor {
-  constructor(private paymentService: IPaymentService) {}
-  
-  async process(valor: number, tipo: string) {
-    const payment = await this.paymentService.processPayment(valor, tipo);
-    const fee = this.paymentService.calculateFee(valor, tipo);
-    return { payment, fee };
-  }
-}
-```
-
-**Problemas**:
-
-- Cliente depende de métodos que não usa
-- Interface muito grande e complexa
-- Difícil de implementar (precisa implementar todos os métodos)
-- Acoplamento desnecessário
-
-#### Exemplo de Aplicação Correta (Código Bom)
-
-```typescript
-// APLICA ISP: Interfaces específicas
-export interface IPaymentStrategy {
-  process(valor: number, metadados: Record<string, unknown>): Promise<DadosProcessamentoPagamento>;
-  calcularTaxa(valor?: number): number;
-  obterTipo(): string;
-}
-
-export interface IPaymentRepository {
-  criar(dados: Omit<DadosPagamento, 'id' | 'dataCriacao' | 'dataAtualizacao'>): Promise<DadosPagamento>;
-  buscarPorId(id: string): Promise<DadosPagamento | null>;
-  buscarTodos(): Promise<DadosPagamento[]>;
-  obterEstatisticas(): Promise<EstatisticasPagamento>;
-}
-
-export interface INotificationService {
-  enviarEmail(destinatario: string, assunto: string, corpo: string): Promise<void>;
-  enviarSMS(telefone: string, mensagem: string): Promise<void>;
-}
-
-export interface IValidationService {
-  validarEmail(email: string): boolean;
-  validarTelefone(telefone: string): boolean;
-  validarCartaoCredito(cartao: string): boolean;
-}
-
-export class PaymentProcessor {
-  constructor(
-    private paymentService: IPaymentStrategy,
-    private repository: IPaymentRepository
-  ) {}
-  
-  async process(valor: number, tipo: string, metadados: Record<string, unknown>) {
-    const payment = await this.paymentService.process(valor, metadados);
-    const taxa = this.paymentService.calcularTaxa(valor);
-    
-    const pagamentoSalvo = await this.repository.criar({
-      tipo,
-      valor: valor + taxa,
-      status: 'PROCESSANDO',
-      nomeCliente: metadados.nomeCliente,
-      emailCliente: metadados.emailCliente,
-      metadados: payment.dadosAdicionais
-    });
-    
-    return pagamentoSalvo;
-  }
-}
-
-export class NotificationManager {
-  constructor(
-    private notificationService: INotificationService,
-    private validationService: IValidationService
-  ) {}
-  
-  async enviarNotificacaoPagamento(email: string, telefone: string, dados: any) {
-    if (this.validationService.validarEmail(email)) {
-      await this.notificationService.enviarEmail(email, 'Pagamento Processado', 'Seu pagamento foi processado');
+    public PaymentProcessorResolver(List<PaymentProcessor> processors) {
+        this.processors = processors.stream()
+                .collect(Collectors.toMap(PaymentProcessor::getType, Function.identity()));
     }
-    
-    if (this.validationService.validarTelefone(telefone)) {
-      await this.notificationService.enviarSMS(telefone, 'Pagamento processado com sucesso!');
+
+    public PaymentProcessor resolve(String type) {
+        PaymentProcessor processor = processors.get(type);
+
+        if (processor == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tipo de pagamento nao suportado");
+        }
+
+        return processor;
     }
-  }
 }
 ```
 
-**Benefícios**:
+O Spring injeta todos os beans que implementam `PaymentProcessor`. O resolver monta um `Map` usando o tipo de cada processador.
 
-- Cada cliente depende apenas do que realmente usa
-- Interfaces menores e mais focadas
-- Fácil de implementar (só implementa o necessário)
-- Menor acoplamento entre componentes
+Para adicionar débito, por exemplo, criamos `DebitCardPaymentProcessor`. O service principal não precisa mudar.
 
----
+### 3. Liskov Substitution Principle
 
-### 5. Dependency Inversion Principle (DIP) - Princípio da Inversão de Dependência
+O princípio da substituição de Liskov diz:
 
-> **"Dependa de abstrações, não de implementações concretas"**
+> Uma implementação deve poder substituir outra sem quebrar o contrato esperado.
 
-#### Analogia do Mundo Real: Tomada Elétrica
+Se `PixPaymentProcessor`, `CreditCardPaymentProcessor` e `BoletoPaymentProcessor` implementam `PaymentProcessor`, o `PaymentService` deve conseguir usar qualquer um deles do mesmo jeito.
 
-Imagine uma **tomada elétrica** na sua casa:
+#### Código problemático
 
-- Você **não precisa saber** como a energia é gerada
-- Pode ser hidrelétrica, solar, eólica, nuclear...
-- A **tomada é a abstração** - sempre funciona igual
-- A **usina é a implementação** - pode mudar sem afetar a tomada
+```java
+public class CreditCardPaymentProcessor implements PaymentProcessor {
 
-**Regra**: Dependa da **tomada** (abstração), não da **usina** (implementação).
+    @Override
+    public ProcessedPayment process(CreatePaymentRequest request) {
+        if (request.amount().compareTo(new BigDecimal("10000")) > 0) {
+            throw new IllegalStateException("Cartao nao aceita valor alto");
+        }
 
-#### Exemplo de Violação (Código Ruim)
-
-```typescript
-// VIOLA DIP: Dependência direta de implementações
-export class MySQLDatabase {
-  async save(data: any) {
-    console.log('Salvando no MySQL...');
-  }
-}
-
-export class GmailService {
-  async sendEmail(to: string, subject: string, body: string) {
-    console.log('Enviando email via Gmail...');
-  }
-}
-
-export class LegacyPaymentService {
-  private database: MySQLDatabase;
-  private emailService: GmailService;
-
-  constructor() {
-    this.database = new MySQLDatabase();
-    this.emailService = new GmailService();
-  }
-
-  async createPayment(data: any) {
-    const payment = { id: '123', amount: 100 };
-    
-    await this.database.save(payment);
-    await this.emailService.sendEmail('user@email.com', 'Pagamento', 'Processado');
-    
-    return payment;
-  }
-}
-```
-
-**Problemas**:
-
-- Se mudar de MySQL para PostgreSQL, precisa modificar código
-- Se mudar de Gmail para Outlook, precisa modificar código
-- Difícil de testar (não consegue mockar dependências)
-- Código acoplado demais
-
-#### Exemplo de Aplicação Correta (Código Bom)
-
-```typescript
-// APLICA DIP: Depende de abstrações
-export interface IDatabase {
-  save(data: any): Promise<void>;
-  findById(id: string): Promise<any>;
-  findAll(): Promise<any[]>;
-}
-
-export interface IEmailService {
-  sendEmail(to: string, subject: string, body: string): Promise<void>;
-}
-
-export class MySQLDatabase implements IDatabase {
-  async save(data: any) {
-    console.log('Salvando no MySQL...');
-  }
-  
-  async findById(id: string) {
-    console.log('Buscando no MySQL...');
-  }
-  
-  async findAll() {
-    console.log('Listando do MySQL...');
-  }
-}
-
-export class PostgreSQLDatabase implements IDatabase {
-  async save(data: any) {
-    console.log('Salvando no PostgreSQL...');
-  }
-  
-  async findById(id: string) {
-    console.log('Buscando no PostgreSQL...');
-  }
-  
-  async findAll() {
-    console.log('Listando do PostgreSQL...');
-  }
-}
-
-export class GmailService implements IEmailService {
-  async sendEmail(to: string, subject: string, body: string) {
-    console.log('Enviando email via Gmail...');
-  }
-}
-
-export class OutlookService implements IEmailService {
-  async sendEmail(to: string, subject: string, body: string) {
-    console.log('Enviando email via Outlook...');
-  }
-}
-
-export class PaymentService {
-  constructor(
-    private database: IDatabase,
-    private emailService: IEmailService
-  ) {}
-
-  async criarPagamento(data: any) {
-    const payment = { id: '123', amount: 100 };
-    
-    await this.database.save(payment);
-    await this.emailService.sendEmail('user@email.com', 'Pagamento', 'Processado');
-    
-    return payment;
-  }
-}
-
-export class AppModule {
-  static create() {
-    const database = new MySQLDatabase();
-    const emailService = new GmailService();
-    
-    return new ServicoPagamento(database, emailService);
-  }
-}
-```
-
-**Benefícios**:
-
-- Posso trocar MySQL por PostgreSQL sem modificar código
-- Posso trocar Gmail por Outlook sem modificar código
-- Fácil de testar (posso usar mocks)
-- Código mais flexível e desacoplado
-
----
-
-## Clean Code e Boas Práticas
-
-### O que é Clean Code?
-
-**Clean Code** é código que é:
-
-- **Fácil de entender** por outros desenvolvedores
-- **Fácil de modificar** e estender
-- **Fácil de testar** e debugar
-- **Fácil de manter** ao longo do tempo
-
-### Vantagens do Clean Code
-
-1. **Manutenibilidade**: Fácil de corrigir bugs e adicionar funcionalidades
-2. **Legibilidade**: Outros desenvolvedores entendem rapidamente
-3. **Testabilidade**: Fácil de criar testes automatizados
-4. **Reutilização**: Código pode ser reutilizado em outros projetos
-5. **Colaboração**: Equipe trabalha melhor com código limpo
-
-### Como Aplicar SOLID na Prática
-
-#### 1. Identifique Responsabilidades
-- Cada classe deve ter **uma** responsabilidade clara
-- Se uma classe faz muitas coisas, divida em classes menores
-
-#### 2. Use Abstrações
-- Crie interfaces para definir contratos
-- Dependa de interfaces, não de implementações concretas
-
-#### 3. Aplique Strategy Pattern
-- Use quando tiver múltiplas formas de fazer a mesma coisa
-- Facilita adicionar novas estratégias sem modificar código existente
-
-#### 4. Injeção de Dependências
-- Injete dependências via construtor
-- Facilita testes e troca de implementações
-
-#### 5. Interfaces Pequenas e Focadas
-- Crie interfaces específicas para cada necessidade
-- Evite interfaces gigantes com muitos métodos
-
-## Comparação: Código com SOLID vs sem SOLID
-
-### Módulo Legacy-Payment (Sem SOLID)
-
-```typescript
-// Código ruim - viola SOLID
-export class LegacyPaymentService {
-  async createPayment(createPaymentDto: CreateLegacyPaymentDto) {
-    if (!createPaymentDto.customerName) {
-      throw new Error('Nome do cliente é obrigatório');
+        return new ProcessedPayment(Map.of("processor", "Visa"));
     }
-    
-    let processedPayment;
-    if (createPaymentDto.type === 'CREDIT_CARD') {
-      processedPayment = await this.processCreditCard(createPaymentDto);
-    } else if (createPaymentDto.type === 'PIX') {
-      processedPayment = await this.processPix(createPaymentDto);
+}
+```
+
+O problema não é lançar exceção. O problema é o contrato ficar confuso. Se algumas implementações retornam resultado e outras interrompem o fluxo por regra de negócio previsível, o código cliente precisa conhecer detalhes de cada implementação.
+
+#### Código melhor
+
+```java
+package br.edu.upf.paymentapi.service;
+
+public record PaymentProcessResult(
+        boolean approved,
+        String reason,
+        ProcessedPayment processedPayment
+) {
+}
+```
+
+```java
+public interface PaymentProcessor {
+
+    String getType();
+
+    PaymentProcessResult process(CreatePaymentRequest request);
+
+    BigDecimal calculateFee(BigDecimal amount);
+}
+```
+
+```java
+@Override
+public PaymentProcessResult process(CreatePaymentRequest request) {
+    if (request.amount().compareTo(new BigDecimal("10000")) > 0) {
+        return new PaymentProcessResult(false, "Valor acima do limite do cartao", null);
     }
-    
-    const fee = this.calculateFee(createPaymentDto.amount, createPaymentDto.type);
-    const payment = await this.prisma.payment.create({ data: formattedData });
-    
-    await this.sendEmail(payment);
-    console.log(`Pagamento ${payment.id} criado com sucesso`);
-    
-    return payment;
-  }
+
+    ProcessedPayment processedPayment = new ProcessedPayment(Map.of(
+            "cardNumber", maskCard(request.cardNumber()),
+            "processor", detectProcessor(request.cardNumber())
+    ));
+
+    return new PaymentProcessResult(true, null, processedPayment);
 }
 ```
 
-**Problemas**:
+Agora todas as implementações obedecem ao mesmo contrato: processar sempre devolve um resultado. O service decide o que fazer com esse resultado.
 
-- Difícil de manter e modificar
-- Difícil de testar
-- Acoplado demais
-- Viola todos os princípios SOLID
+### 4. Interface Segregation Principle
 
-### Módulo Payment (Com SOLID)
+O princípio de segregação de interfaces diz:
 
-```typescript
-// Código bom - aplica SOLID
-export class PixService {
-  async process(valor: number, metadados: Record<string, unknown>) {
-    // Processa PIX
-  }
-}
+> Um cliente não deve depender de métodos que ele não usa.
 
-export class CreditCardService {
-  async process(valor: number, metadados: Record<string, unknown>) {
-    // Processa Cartão
-  }
-}
+Em Java, isso aparece quando criamos uma interface grande demais.
 
-export class BoletoService {
-  async process(valor: number, metadados: Record<string, unknown>) {
-    // Processa Boleto
-  }
-}
+#### Interface ruim
 
-export class PaymentService {
-  constructor(
-    @Inject('IPaymentRepository')
-    private repositorioPagamento: IPaymentRepository, // DIP: Depende de abstração
-    private servicoCartaoCredito: CreditCardService,  // DIP: Injeção de dependência
-    private servicoPix: PixService,                   // DIP: Injeção de dependência
-    private servicoBoleto: BoletoService              // DIP: Injeção de dependência
-  ) {
-    // OCP: Estratégias podem ser adicionadas sem modificar código
-    this.estrategias = new Map();
-    this.estrategias.set('CARTAO_CREDITO', servicoCartaoCredito);
-    this.estrategias.set('PIX', servicoPix);
-    this.estrategias.set('BOLETO', servicoBoleto);
-  }
+```java
+public interface PaymentOperations {
 
-  async criarPagamento(dadosPagamento: CriarPagamentoDto) {
-    // OCP: Busca estratégia sem if/else
-    const estrategia = this.estrategias.get(dadosPagamento.tipo);
-    
-    // LSP: Qualquer estratégia pode ser usada
-    const pagamentoProcessado = await estrategia.process(/* ... */);
-    
-    // SRP: Delega responsabilidades específicas
-    const taxa = estrategia.calcularTaxa(dadosPagamento.valor);
-    const pagamento = await this.repositorioPagamento.criar(/* ... */);
-    
-    return pagamento;
-  }
+    Payment create(CreatePaymentRequest request);
+
+    Payment findById(String id);
+
+    List<Payment> findAll();
+
+    void sendEmail(Payment payment);
+
+    void sendSms(Payment payment);
+
+    BigDecimal calculateFee(BigDecimal amount, String type);
+
+    byte[] exportToPdf();
+
+    byte[] exportToExcel();
 }
 ```
 
-**Benefícios**:
+Quem só precisa calcular taxa acaba dependendo de exportação PDF, SMS e busca no banco.
 
-- Fácil de manter e modificar
-- Fácil de testar
-- Desacoplado
-- Aplica todos os princípios SOLID
+#### Interfaces menores
 
-## Conclusão
+```java
+public interface PaymentProcessor {
 
-Os princípios SOLID são fundamentais para escrever código de qualidade. Eles nos ajudam a criar software que é:
+    String getType();
 
-- **Manutenível**: Fácil de modificar e estender
-- **Testável**: Fácil de criar testes automatizados
-- **Reutilizável**: Código pode ser usado em diferentes contextos
-- **Legível**: Fácil de entender por outros desenvolvedores
-- **Flexível**: Fácil de adaptar a mudanças
+    PaymentProcessResult process(CreatePaymentRequest request);
 
----
+    BigDecimal calculateFee(BigDecimal amount);
+}
+```
 
-**Fonte**: Material baseado no curso ["SOLID com TypeScript" da Alura](https://www.alura.com.br/curso-online-solid-typescript).
+```java
+public interface PaymentNotifier {
 
+    void notifyCreated(Payment payment);
+}
+```
+
+```java
+public interface PaymentReportExporter {
+
+    byte[] export();
+}
+```
+
+Interfaces pequenas deixam claro o papel de cada componente.
+
+### 5. Dependency Inversion Principle
+
+O princípio da inversão de dependência diz:
+
+> Dependa de abstrações, não de implementações concretas.
+
+No Spring, isso aparece bastante com injeção de dependência.
+
+#### Código acoplado
+
+```java
+public class PaymentService {
+
+    private final PaymentRepository paymentRepository = new PaymentRepository();
+    private final EmailPaymentNotifier notifier = new EmailPaymentNotifier();
+}
+```
+
+Esse exemplo nem combina com Spring Data, porque repository do Spring é uma interface gerenciada pelo container. Além disso, criar dependências com `new` dentro da classe dificulta testes.
+
+#### Código melhor
+
+```java
+@Service
+public class PaymentService {
+
+    private final PaymentRepository paymentRepository;
+    private final PaymentNotifier notifier;
+
+    public PaymentService(PaymentRepository paymentRepository, PaymentNotifier notifier) {
+        this.paymentRepository = paymentRepository;
+        this.notifier = notifier;
+    }
+}
+```
+
+```java
+@Component
+public class ConsolePaymentNotifier implements PaymentNotifier {
+
+    @Override
+    public void notifyCreated(Payment payment) {
+        System.out.println("Pagamento criado: " + payment.getId());
+    }
+}
+```
+
+O service não sabe se a notificação vai para console, email, SMS ou fila RabbitMQ. Ele depende do contrato `PaymentNotifier`.
+
+## Código completo
+
+Este é o conjunto mínimo de classes que representa a versão melhorada do exemplo.
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import java.util.Map;
+
+public record ProcessedPayment(Map<String, Object> metadata) {
+}
+```
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import java.math.BigDecimal;
+
+public interface PaymentProcessor {
+
+    String getType();
+
+    ProcessedPayment process(CreatePaymentRequest request);
+
+    BigDecimal calculateFee(BigDecimal amount);
+}
+```
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import java.math.BigDecimal;
+import java.util.Map;
+import org.springframework.stereotype.Service;
+
+@Service
+public class PixPaymentProcessor implements PaymentProcessor {
+
+    @Override
+    public String getType() {
+        return "PIX";
+    }
+
+    @Override
+    public ProcessedPayment process(CreatePaymentRequest request) {
+        return new ProcessedPayment(Map.of(
+                "pixKey", request.pixKey(),
+                "qrCode", "pix-" + System.currentTimeMillis()
+        ));
+    }
+
+    @Override
+    public BigDecimal calculateFee(BigDecimal amount) {
+        return BigDecimal.ZERO;
+    }
+}
+```
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import java.math.BigDecimal;
+import java.util.Map;
+import org.springframework.stereotype.Service;
+
+@Service
+public class CreditCardPaymentProcessor implements PaymentProcessor {
+
+    @Override
+    public String getType() {
+        return "CREDIT_CARD";
+    }
+
+    @Override
+    public ProcessedPayment process(CreatePaymentRequest request) {
+        return new ProcessedPayment(Map.of(
+                "cardNumber", maskCard(request.cardNumber()),
+                "processor", detectProcessor(request.cardNumber())
+        ));
+    }
+
+    @Override
+    public BigDecimal calculateFee(BigDecimal amount) {
+        return amount.multiply(new BigDecimal("0.03"));
+    }
+
+    private String maskCard(String cardNumber) {
+        return "************" + cardNumber.substring(cardNumber.length() - 4);
+    }
+
+    private String detectProcessor(String cardNumber) {
+        if (cardNumber.startsWith("4")) {
+            return "Visa";
+        }
+        if (cardNumber.startsWith("5")) {
+            return "Mastercard";
+        }
+        return "Unknown";
+    }
+}
+```
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import java.math.BigDecimal;
+import java.util.Map;
+import org.springframework.stereotype.Service;
+
+@Service
+public class BoletoPaymentProcessor implements PaymentProcessor {
+
+    @Override
+    public String getType() {
+        return "BOLETO";
+    }
+
+    @Override
+    public ProcessedPayment process(CreatePaymentRequest request) {
+        return new ProcessedPayment(Map.of(
+                "boletoNumber", "34191.79001 01043.510047 91020.150008 1",
+                "dueDate", request.dueDate()
+        ));
+    }
+
+    @Override
+    public BigDecimal calculateFee(BigDecimal amount) {
+        return new BigDecimal("2.50");
+    }
+}
+```
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
+
+@Component
+public class PaymentProcessorResolver {
+
+    private final Map<String, PaymentProcessor> processors;
+
+    public PaymentProcessorResolver(List<PaymentProcessor> processors) {
+        this.processors = processors.stream()
+                .collect(Collectors.toMap(PaymentProcessor::getType, Function.identity()));
+    }
+
+    public PaymentProcessor resolve(String type) {
+        PaymentProcessor processor = processors.get(type);
+
+        if (processor == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tipo de pagamento nao suportado");
+        }
+
+        return processor;
+    }
+}
+```
+
+## Erros comuns
+
+- Criar interface antes de existir mais de uma implementação real.
+- Colocar regra de negócio no controller.
+- Criar uma interface gigante chamada `PaymentServiceInterface` com todos os métodos do sistema.
+- Usar SOLID para complicar uma aula simples.
+- Confundir repository com regra de negócio. Repository acessa o MongoDB; regra de negócio fica no service.
+- Usar `@Autowired` em atributo em vez de injeção por construtor.
+
+## Resumo
+
+SOLID não é sobre escrever mais código. É sobre organizar responsabilidades para que o sistema aguente mudança.
+
+No exemplo da Payment API:
+
+- SRP separa responsabilidades.
+- OCP permite adicionar novo tipo de pagamento sem mexer no service principal.
+- LSP garante que qualquer processador siga o mesmo contrato.
+- ISP evita interfaces grandes demais.
+- DIP reduz acoplamento usando abstrações e injeção de dependência.
+
+Na próxima parte prática, vamos codar primeiro a versão legacy, ignorando SOLID de propósito. Depois vamos transformar esse código em uma versão mais limpa usando os princípios vistos aqui.

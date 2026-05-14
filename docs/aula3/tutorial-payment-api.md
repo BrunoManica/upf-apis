@@ -1,1415 +1,1166 @@
-# Tutorial: Construindo uma Payment API com NestJS
+# Tutorial: Construindo uma Payment API com Java 17
 
-## Introdução
+## Objetivo da aula
 
-Este tutorial demonstra como construir uma API de pagamentos completa usando NestJS, PostgreSQL e Prisma. A API será construída seguindo os princípios SOLID, com dois módulos: um que viola os princípios (legacy-payment) e outro que os aplica corretamente (payment).
+Nesta aula vamos construir uma API de pagamentos com Java 17, Spring Boot e MongoDB.
 
-## Pré-requisitos
+Vamos fazer isso em dois momentos:
 
-- Node.js 18 ou superior
-- Docker e Docker Compose
-- Conhecimento básico de TypeScript e APIs REST
+- primeiro, uma versão `legacy-payment`, funcionando, mas ignorando SOLID de propósito
+- depois, uma versão `payments`, refatorada com responsabilidades mais claras
 
-## Passo 1: Setup Inicial do Projeto
+Essa comparação é importante. Fica muito mais fácil entender SOLID quando primeiro sentimos o problema de um código que cresceu sem organização.
 
-### 1.1 Criar Projeto NestJS
+## Resultado final
 
-```bash
-# Instalar Nest CLI globalmente
-npm i -g @nestjs/cli
+Ao final, teremos uma API com:
 
-# Criar novo projeto
-nest new payment-api
-cd payment-api
+- criação de pagamentos
+- listagem de pagamentos
+- busca por id
+- estatísticas simples
+- MongoDB rodando via Docker
+- Swagger UI para testar os endpoints
+- exemplo legado sem SOLID
+- exemplo melhorado com Strategy e injeção de dependência
 
-# Instalar dependências adicionais
-npm install @prisma/client prisma @nestjs/swagger swagger-ui-express
+Endpoints principais:
+
+```text
+POST /api/v1/legacy-payments
+GET  /api/v1/legacy-payments
+GET  /api/v1/legacy-payments/{id}
+GET  /api/v1/legacy-payments/stats
+
+POST /api/v1/payments
+GET  /api/v1/payments
+GET  /api/v1/payments/{id}
+GET  /api/v1/payments/stats
 ```
 
-### 1.2 Configurar TypeScript
+## Contexto
 
-O NestJS já vem com TypeScript configurado, mas vamos verificar o `tsconfig.json`:
+Pagamentos são um ótimo exemplo para estudar SOLID porque cada forma de pagamento tem detalhes próprios.
 
-```json
-{
-  "compilerOptions": {
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "resolvePackageJsonExports": true,
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "declaration": true,
-    "removeComments": true,
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
-    "allowSyntheticDefaultImports": true,
-    "target": "ES2023",
-    "sourceMap": true,
-    "outDir": "./dist",
-    "baseUrl": "./",
-    "incremental": true,
-    "skipLibCheck": true,
-    "strictNullChecks": true,
-    "forceConsistentCasingInFileNames": true,
-    "noImplicitAny": false,
-    "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false
-  }
+PIX precisa de chave e QR Code. Cartão precisa de número, CVV, validade e uma taxa percentual. Boleto precisa de vencimento e número do boleto.
+
+Se colocarmos tudo isso dentro de um único service, o código até funciona, mas começa a ficar difícil de alterar. Quando entrar um novo tipo de pagamento, a tendência será abrir a mesma classe e adicionar mais um `if`.
+
+Nesta aula vamos fazer isso primeiro, justamente para enxergar o problema. Depois vamos melhorar.
+
+## Explicação conceitual
+
+A aplicação vai seguir o padrão mais comum para APIs Spring Boot:
+
+```text
+controller -> service -> repository -> MongoDB
+```
+
+Cada parte tem uma função:
+
+- controller recebe a requisição HTTP
+- DTO representa os dados de entrada e saída
+- service concentra regra de negócio
+- repository acessa o MongoDB
+- model representa o documento salvo no banco
+
+Na versão legacy, o service vai misturar responsabilidades. Na versão com SOLID, vamos separar o processamento de cada tipo de pagamento em classes próprias.
+
+## Setup inicial
+
+### Pré-requisitos
+
+- Java 17 instalado
+- Docker e Docker Compose
+- acesso a um terminal no Windows, Linux ou macOS
+- editor de código, como IntelliJ IDEA ou VS Code
+
+### Criar o projeto Spring Boot
+
+Acesse o Spring Initializr:
+
+```text
+https://start.spring.io
+```
+
+Use estas opções:
+
+- Project: Gradle - Groovy
+- Language: Java
+- Spring Boot: versão estável sugerida pelo site
+- Group: `br.edu.upf`
+- Artifact: `payment-api`
+- Name: `payment-api`
+- Description: API de pagamentos com Spring Boot e MongoDB
+- Package name: `br.edu.upf.paymentapi`
+- Packaging: Jar
+- Java: 17
+
+Para evitar diferença entre o que o Spring Initializr gera e o que vamos usar no código, adicione somente:
+
+- Spring Web.
+
+Depois clique em `Generate` para baixar o `.zip`.
+
+O ponto importante é este: vamos usar o Spring Initializr apenas para criar a estrutura inicial do projeto e o Gradle Wrapper. As outras bibliotecas serão colocadas manualmente no `build.gradle`, do mesmo jeito que fizemos na aula 2.
+
+### Descompactar e abrir o projeto
+
+No terminal, vá para a pasta onde o arquivo foi baixado e execute:
+
+```bash
+unzip payment-api.zip -d payment-api
+cd payment-api
+```
+
+No Windows, você também pode descompactar pelo explorador de arquivos e depois abrir a pasta `payment-api` no editor.
+
+### Configurar a aplicação
+
+Abra `src/main/resources/application.properties`:
+
+```properties
+spring.application.name=payment-api
+server.port=${PORT:8080}
+
+spring.data.mongodb.uri=${MONGODB_URI:mongodb://payment_user:payment_pass@localhost:27017/payment_db?authSource=admin}
+
+springdoc.swagger-ui.path=/swagger-ui.html
+```
+
+Essa configuração deixa a API preparada para rodar localmente e também em container.
+
+`server.port=${PORT:8080}` usa a variável `PORT` quando ela existir. Se não existir, a API sobe na porta `8080`.
+
+`spring.data.mongodb.uri` aponta para o MongoDB local por padrão. A variável `MONGODB_URI` permite trocar a conexão sem alterar código.
+
+`springdoc.swagger-ui.path` define o endereço da tela do Swagger.
+
+### Substituir o build.gradle
+
+Abra o arquivo `build.gradle`, apague o conteúdo atual e substitua por este:
+
+```groovy
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '4.0.6'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'br.edu.upf'
+version = '0.0.1-SNAPSHOT'
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9'
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-mongodb-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testCompileOnly 'org.projectlombok:lombok'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testAnnotationProcessor 'org.projectlombok:lombok'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
 }
 ```
 
-## Passo 2: Configuração do Banco de Dados
+Mesmo tendo marcado apenas `Spring Web` no Initializr, agora o projeto passa a ter MongoDB, validação, Swagger e Lombok porque colocamos essas bibliotecas manualmente no Gradle.
 
-### 2.1 Configurar Banco de Dados
+A comunicação com o MongoDB continua existindo. Ela não vem da opção marcada no Initializr; ela vem desta dependência:
 
-Você pode usar PostgreSQL de duas formas:
-
-#### Opção 1: Docker Run (Mais Simples)
-
-```bash
-# Executar PostgreSQL com docker run
-docker run --name payment-postgres \
-  -e POSTGRES_USER=payment_user \
-  -e POSTGRES_PASSWORD=payment_pass \
-  -e POSTGRES_DB=payment_db \
-  -p 5432:5432 \
-  -d postgres:15-alpine
-
-# Verificar se está rodando
-docker ps
-
-# Parar o container (quando necessário)
-docker stop payment-postgres
-
-# Iniciar novamente
-docker start payment-postgres
+```groovy
+implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
 ```
 
-#### Opção 2: Docker Compose (Mais Organizado)
+Esse starter adiciona o Spring Data MongoDB ao projeto. Mais adiante, quando criarmos o `PaymentRepository`, o Spring vai usar essa biblioteca para transformar chamadas Java, como `save`, `findAll` e `findById`, em operações no MongoDB.
 
-Criar arquivo `docker-compose.yml`:
+Esse arquivo usa o starter `spring-boot-starter-webmvc`, que é o nome gerado nas versões novas do Spring Boot. Se o editor pedir para recarregar o projeto Gradle, aceite.
+
+### Configurar informações do Swagger
+
+Crie a pasta:
+
+```text
+src/main/java/br/edu/upf/paymentapi/config
+```
+
+Crie o arquivo `src/main/java/br/edu/upf/paymentapi/config/OpenApiConfig.java`:
+
+```java
+package br.edu.upf.paymentapi.config;
+
+import io.swagger.v3.oas.annotations.OpenAPIDefinition;
+import io.swagger.v3.oas.annotations.info.Info;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@OpenAPIDefinition(
+        info = @Info(
+                title = "Payment API",
+                version = "1.0",
+                description = "API de pagamentos com Spring Boot, MongoDB e SOLID"
+        )
+)
+public class OpenApiConfig {
+}
+```
+
+`@Configuration` diz ao Spring que essa classe participa da configuração da aplicação.
+
+`@OpenAPIDefinition` personaliza as informações que aparecem no Swagger.
+
+## Passo a passo
+
+## Passo 1: Configurar o MongoDB
+
+### 1.1 Criar o Docker Compose
+
+Na raiz do projeto, crie o arquivo `docker-compose.yml`:
 
 ```yaml
-version: '3.8'
-
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: payment-postgres
+  mongodb:
+    image: mongo:7
+    container_name: payment-mongodb
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "27017:27017"
     environment:
-      POSTGRES_USER: payment_user
-      POSTGRES_PASSWORD: payment_pass
-      POSTGRES_DB: payment_db
+      MONGO_INITDB_ROOT_USERNAME: payment_user
+      MONGO_INITDB_ROOT_PASSWORD: payment_pass
+      MONGO_INITDB_DATABASE: payment_db
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - payment-network
+      - mongodb_data:/data/db
 
 volumes:
-  postgres_data:
-
-networks:
-  payment-network:
-    driver: bridge
+  mongodb_data:
 ```
 
-E executar:
+Esse container sobe um MongoDB local na porta `27017`.
+
+A API vai se conectar nesse banco usando a URI definida em `application.properties`. O container é o banco de dados rodando localmente; o `spring-boot-starter-data-mongodb` é a biblioteca que permite a aplicação Java conversar com ele.
+
+### 1.2 Subir o banco
+
 ```bash
-# Subir banco
-docker-compose up -d
-
-# Parar banco
-docker-compose down
+docker compose up -d
 ```
 
-**Recomendação**: Use a **Opção 1** (docker run) para simplicidade no tutorial.
+Para verificar:
 
-### 2.2 Criar arquivo .env
-
-**IMPORTANTE**: O arquivo `.env` deve ser criado na **raiz do projeto** (mesmo nível do `package.json`).
-
-#### Opção 1: Via linha de comando
-
-**Windows (PowerShell/CMD):**
 ```bash
-echo "DATABASE_URL=\"postgresql://payment_user:payment_pass@localhost:5432/payment_db?schema=public\"" > .env
-```
-
-**Linux/Mac:**
-```bash
-echo 'DATABASE_URL="postgresql://payment_user:payment_pass@localhost:5432/payment_db?schema=public"' > .env
-```
-
-#### Opção 2: Via editor de texto (mais fácil)
-
-1. **Crie um novo arquivo** na raiz do projeto
-2. **Nomeie como** `.env` (com o ponto no início)
-3. **Cole o conteúdo**:
-```
-DATABASE_URL="postgresql://payment_user:payment_pass@localhost:5432/payment_db?schema=public"
-```
-
-**Estrutura de pastas esperada:**
-```
-payment-api/
-├── src/
-├── package.json
-├── .env          ← AQUI!
-├── prisma/
-└── ...
-```
-
-**Nota**: Certifique-se de que o PostgreSQL está rodando antes de continuar:
-```bash
-# Verificar se o container está rodando
 docker ps
-
-# Se não estiver, iniciar novamente
-docker start payment-postgres
 ```
 
-### 2.3 Configurar Schema do Prisma
-
-Editar `prisma/schema.prisma`:
-
-```prisma
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-model Payment {
-  id            String   @id @default(uuid())
-  type          String   // CREDIT_CARD, PIX, BOLETO
-  amount        Decimal  @db.Decimal(10, 2)
-  status        String   // PENDING, APPROVED, REJECTED
-  customerName  String
-  customerEmail String
-  metadata      Json?    // Dados específicos de cada tipo
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@map("payments")
-}
-```
-
-### 2.4 Aplicar Migrações
+Para parar:
 
 ```bash
-# Criar e aplicar migração
-npx prisma migrate dev --name init
-
-# Gerar cliente Prisma
-npx prisma generate
+docker compose down
 ```
 
-## Passo 3: Criar Módulo Prisma
+## Passo 2: Criar o model e o repository
 
-### 3.1 Criar PrismaService
+### 2.1 Criar o documento Payment
+
+Crie `src/main/java/br/edu/upf/paymentapi/model/Payment.java`:
+
+```java
+package br.edu.upf.paymentapi.model;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+@Data
+@NoArgsConstructor
+@Document(collection = "payments")
+public class Payment {
+
+    @Id
+    private String id;
+    private String type;
+    private BigDecimal amount;
+    private String status;
+    private String customerName;
+    private String customerEmail;
+    private Map<String, Object> metadata = new HashMap<>();
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}
+```
+
+`@Document` informa ao Spring Data MongoDB que essa classe representa documentos da coleção `payments`.
+
+`@Data` e `@NoArgsConstructor` vêm do Lombok. Eles geram getters, setters e construtor vazio em tempo de compilação. Por isso a classe fica curta, mas o restante do código ainda consegue chamar métodos como `payment.getId()` e `payment.setAmount(...)`.
+
+### 2.2 Criar o repository
+
+Crie `src/main/java/br/edu/upf/paymentapi/repository/PaymentRepository.java`:
+
+```java
+package br.edu.upf.paymentapi.repository;
+
+import br.edu.upf.paymentapi.model.Payment;
+import org.springframework.data.mongodb.repository.MongoRepository;
+
+public interface PaymentRepository extends MongoRepository<Payment, String> {
+}
+```
+
+Não precisamos implementar essa interface. O Spring Data cria a implementação em tempo de execução.
+
+É aqui que a comunicação com o MongoDB fica visível no código. Quando o service chamar `paymentRepository.save(payment)`, o Spring Data MongoDB vai gravar um documento na coleção `payments`. Quando chamar `findAll()` ou `findById(id)`, ele vai consultar essa mesma coleção.
+
+## Passo 3: Criar DTOs compartilhados
+
+### 3.1 Request de criação
+
+Crie `src/main/java/br/edu/upf/paymentapi/dto/CreatePaymentRequest.java`:
+
+```java
+package br.edu.upf.paymentapi.dto;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
+
+public record CreatePaymentRequest(
+        @NotBlank String type,
+        @NotNull @DecimalMin("0.01") BigDecimal amount,
+        @NotBlank String customerName,
+        @NotBlank @Email String customerEmail,
+        String cardNumber,
+        String cvv,
+        String expiryDate,
+        String pixKey,
+        String dueDate
+) {
+}
+```
+
+Usamos `record` porque DTO é só transporte de dados. Ele não precisa ter regra de negócio.
+
+### 3.2 Response de pagamento
+
+Crie `src/main/java/br/edu/upf/paymentapi/dto/PaymentResponse.java`:
+
+```java
+package br.edu.upf.paymentapi.dto;
+
+import br.edu.upf.paymentapi.model.Payment;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Map;
+
+public record PaymentResponse(
+        String id,
+        String type,
+        BigDecimal amount,
+        String status,
+        String customerName,
+        String customerEmail,
+        Map<String, Object> metadata,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
+) {
+
+    public static PaymentResponse from(Payment payment) {
+        return new PaymentResponse(
+                payment.getId(),
+                payment.getType(),
+                payment.getAmount(),
+                payment.getStatus(),
+                payment.getCustomerName(),
+                payment.getCustomerEmail(),
+                payment.getMetadata(),
+                payment.getCreatedAt(),
+                payment.getUpdatedAt()
+        );
+    }
+}
+```
+
+O response evita devolver diretamente o objeto interno da aplicação sem controle.
+
+### 3.3 Response de estatísticas
+
+Crie `src/main/java/br/edu/upf/paymentapi/dto/PaymentStatsResponse.java`:
+
+```java
+package br.edu.upf.paymentapi.dto;
+
+import java.math.BigDecimal;
+import java.util.Map;
+
+public record PaymentStatsResponse(
+        long totalPayments,
+        BigDecimal totalAmount,
+        Map<String, Long> byType
+) {
+}
+```
+
+## Passo 4: Criar a versão legacy sem SOLID
+
+Agora vamos criar a parte propositalmente ruim.
+
+Ela vai funcionar, mas vai misturar validação, processamento, cálculo de taxa, persistência, log e estatísticas no mesmo service.
+
+### 4.1 Criar o LegacyPaymentService
+
+Crie `src/main/java/br/edu/upf/paymentapi/service/LegacyPaymentService.java`:
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import br.edu.upf.paymentapi.dto.PaymentStatsResponse;
+import br.edu.upf.paymentapi.model.Payment;
+import br.edu.upf.paymentapi.repository.PaymentRepository;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+@Service
+public class LegacyPaymentService {
+
+    private final PaymentRepository paymentRepository;
+
+    public LegacyPaymentService(PaymentRepository paymentRepository) {
+        this.paymentRepository = paymentRepository;
+    }
+
+    public Payment create(CreatePaymentRequest request) {
+        validateBasicData(request);
+
+        Map<String, Object> metadata = new HashMap<>();
+
+        if ("PIX".equals(request.type())) {
+            if (request.pixKey() == null || request.pixKey().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chave PIX e obrigatoria");
+            }
+
+            metadata.put("pixKey", request.pixKey());
+            metadata.put("qrCode", "pix-qr-code-" + System.currentTimeMillis());
+        } else if ("CREDIT_CARD".equals(request.type())) {
+            if (request.cardNumber() == null || request.cvv() == null || request.expiryDate() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dados do cartao sao obrigatorios");
+            }
+
+            metadata.put("cardNumber", maskCard(request.cardNumber()));
+            metadata.put("cvv", "***");
+            metadata.put("expiryDate", request.expiryDate());
+            metadata.put("processor", detectCardProcessor(request.cardNumber()));
+        } else if ("BOLETO".equals(request.type())) {
+            if (request.dueDate() == null || request.dueDate().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Data de vencimento e obrigatoria");
+            }
+
+            metadata.put("boletoNumber", generateBoletoNumber());
+            metadata.put("dueDate", request.dueDate());
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tipo de pagamento nao suportado");
+        }
+
+        BigDecimal fee = calculateFee(request.amount(), request.type());
+        BigDecimal totalAmount = request.amount().add(fee);
+        String status = determineStatus(request.amount(), request.type());
+
+        Payment payment = new Payment();
+        payment.setType(request.type());
+        payment.setAmount(totalAmount);
+        payment.setStatus(status);
+        payment.setCustomerName(request.customerName().toUpperCase());
+        payment.setCustomerEmail(request.customerEmail().toLowerCase());
+        payment.setMetadata(metadata);
+        payment.setCreatedAt(LocalDateTime.now());
+        payment.setUpdatedAt(LocalDateTime.now());
+
+        Payment savedPayment = paymentRepository.save(payment);
+
+        System.out.println("Email enviado para " + savedPayment.getCustomerEmail());
+        System.out.println("Pagamento criado com sucesso: " + savedPayment.getId());
+
+        return savedPayment;
+    }
+
+    public List<Payment> findAll() {
+        return paymentRepository.findAll();
+    }
+
+    public Payment findById(String id) {
+        return paymentRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pagamento nao encontrado"));
+    }
+
+    public PaymentStatsResponse getStats() {
+        List<Payment> payments = paymentRepository.findAll();
+
+        BigDecimal totalAmount = payments.stream()
+                .map(Payment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Map<String, Long> byType = payments.stream()
+                .collect(Collectors.groupingBy(Payment::getType, Collectors.counting()));
+
+        return new PaymentStatsResponse(payments.size(), totalAmount, byType);
+    }
+
+    private void validateBasicData(CreatePaymentRequest request) {
+        if (request.customerName() == null || request.customerName().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nome do cliente e obrigatorio");
+        }
+
+        if (request.amount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor deve ser maior que zero");
+        }
+    }
+
+    private BigDecimal calculateFee(BigDecimal amount, String type) {
+        if ("CREDIT_CARD".equals(type)) {
+            return amount.multiply(new BigDecimal("0.03"));
+        }
+
+        if ("BOLETO".equals(type)) {
+            return new BigDecimal("2.50");
+        }
+
+        return BigDecimal.ZERO;
+    }
+
+    private String determineStatus(BigDecimal amount, String type) {
+        if (amount.compareTo(new BigDecimal("10000")) > 0) {
+            return "PENDING";
+        }
+
+        if ("CREDIT_CARD".equals(type) && amount.compareTo(new BigDecimal("5000")) > 0) {
+            return "PENDING";
+        }
+
+        return "APPROVED";
+    }
+
+    private String maskCard(String cardNumber) {
+        return "************" + cardNumber.substring(cardNumber.length() - 4);
+    }
+
+    private String detectCardProcessor(String cardNumber) {
+        if (cardNumber.startsWith("4")) {
+            return "Visa";
+        }
+
+        if (cardNumber.startsWith("5")) {
+            return "Mastercard";
+        }
+
+        return "Unknown";
+    }
+
+    private String generateBoletoNumber() {
+        return "34191.79001 01043.510047 91020.150008 1 84460000020000";
+    }
+}
+```
+
+Esse código é útil para aula porque deixa os problemas visíveis:
+
+- muitos motivos para mudar
+- `if` crescendo conforme entram novos tipos
+- processamento de pagamento misturado com persistência
+- notificação misturada no fluxo principal
+- difícil testar cada tipo de pagamento isoladamente
+
+### 4.2 Criar o LegacyPaymentController
+
+Crie `src/main/java/br/edu/upf/paymentapi/controller/LegacyPaymentController.java`:
+
+```java
+package br.edu.upf.paymentapi.controller;
+
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import br.edu.upf.paymentapi.dto.PaymentResponse;
+import br.edu.upf.paymentapi.dto.PaymentStatsResponse;
+import br.edu.upf.paymentapi.service.LegacyPaymentService;
+import jakarta.validation.Valid;
+import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/v1/legacy-payments")
+public class LegacyPaymentController {
+
+    private final LegacyPaymentService legacyPaymentService;
+
+    public LegacyPaymentController(LegacyPaymentService legacyPaymentService) {
+        this.legacyPaymentService = legacyPaymentService;
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public PaymentResponse create(@RequestBody @Valid CreatePaymentRequest request) {
+        return PaymentResponse.from(legacyPaymentService.create(request));
+    }
+
+    @GetMapping
+    public List<PaymentResponse> findAll() {
+        return legacyPaymentService.findAll()
+                .stream()
+                .map(PaymentResponse::from)
+                .toList();
+    }
+
+    @GetMapping("/{id}")
+    public PaymentResponse findById(@PathVariable String id) {
+        return PaymentResponse.from(legacyPaymentService.findById(id));
+    }
+
+    @GetMapping("/stats")
+    public PaymentStatsResponse getStats() {
+        return legacyPaymentService.getStats();
+    }
+}
+```
+
+O controller está aceitável: ele recebe HTTP, valida o body com `@Valid` e delega para o service. O problema principal está no service.
+
+## Passo 5: Criar a versão com SOLID
+
+Agora vamos criar a versão melhorada.
+
+A mudança principal é tirar o processamento específico de cada tipo de pagamento do service principal.
+
+### 5.1 Criar objetos de apoio
+
+Crie `src/main/java/br/edu/upf/paymentapi/service/ProcessedPayment.java`:
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import java.util.Map;
+
+public record ProcessedPayment(Map<String, Object> metadata) {
+}
+```
+
+Crie `src/main/java/br/edu/upf/paymentapi/service/PaymentProcessor.java`:
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import java.math.BigDecimal;
+
+public interface PaymentProcessor {
+
+    String getType();
+
+    ProcessedPayment process(CreatePaymentRequest request);
+
+    BigDecimal calculateFee(BigDecimal amount);
+}
+```
+
+Essa interface é o contrato das estratégias de pagamento.
+
+### 5.2 Criar o processador PIX
+
+Crie `src/main/java/br/edu/upf/paymentapi/service/PixPaymentProcessor.java`:
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import java.math.BigDecimal;
+import java.util.Map;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+@Service
+public class PixPaymentProcessor implements PaymentProcessor {
+
+    @Override
+    public String getType() {
+        return "PIX";
+    }
+
+    @Override
+    public ProcessedPayment process(CreatePaymentRequest request) {
+        if (request.pixKey() == null || request.pixKey().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chave PIX e obrigatoria");
+        }
+
+        return new ProcessedPayment(Map.of(
+                "pixKey", request.pixKey(),
+                "qrCode", "pix-qr-code-" + System.currentTimeMillis()
+        ));
+    }
+
+    @Override
+    public BigDecimal calculateFee(BigDecimal amount) {
+        return BigDecimal.ZERO;
+    }
+}
+```
+
+### 5.3 Criar o processador de cartão
+
+Crie `src/main/java/br/edu/upf/paymentapi/service/CreditCardPaymentProcessor.java`:
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import java.math.BigDecimal;
+import java.util.Map;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+@Service
+public class CreditCardPaymentProcessor implements PaymentProcessor {
+
+    @Override
+    public String getType() {
+        return "CREDIT_CARD";
+    }
+
+    @Override
+    public ProcessedPayment process(CreatePaymentRequest request) {
+        if (request.cardNumber() == null || request.cvv() == null || request.expiryDate() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dados do cartao sao obrigatorios");
+        }
+
+        return new ProcessedPayment(Map.of(
+                "cardNumber", maskCard(request.cardNumber()),
+                "cvv", "***",
+                "expiryDate", request.expiryDate(),
+                "processor", detectCardProcessor(request.cardNumber())
+        ));
+    }
+
+    @Override
+    public BigDecimal calculateFee(BigDecimal amount) {
+        return amount.multiply(new BigDecimal("0.03"));
+    }
+
+    private String maskCard(String cardNumber) {
+        return "************" + cardNumber.substring(cardNumber.length() - 4);
+    }
+
+    private String detectCardProcessor(String cardNumber) {
+        if (cardNumber.startsWith("4")) {
+            return "Visa";
+        }
+
+        if (cardNumber.startsWith("5")) {
+            return "Mastercard";
+        }
+
+        return "Unknown";
+    }
+}
+```
+
+### 5.4 Criar o processador de boleto
+
+Crie `src/main/java/br/edu/upf/paymentapi/service/BoletoPaymentProcessor.java`:
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import java.math.BigDecimal;
+import java.util.Map;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+@Service
+public class BoletoPaymentProcessor implements PaymentProcessor {
+
+    @Override
+    public String getType() {
+        return "BOLETO";
+    }
+
+    @Override
+    public ProcessedPayment process(CreatePaymentRequest request) {
+        if (request.dueDate() == null || request.dueDate().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Data de vencimento e obrigatoria");
+        }
+
+        return new ProcessedPayment(Map.of(
+                "boletoNumber", "34191.79001 01043.510047 91020.150008 1 84460000020000",
+                "dueDate", request.dueDate()
+        ));
+    }
+
+    @Override
+    public BigDecimal calculateFee(BigDecimal amount) {
+        return new BigDecimal("2.50");
+    }
+}
+```
+
+### 5.5 Criar o resolver de estratégias
+
+Crie `src/main/java/br/edu/upf/paymentapi/service/PaymentProcessorResolver.java`:
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
+
+@Component
+public class PaymentProcessorResolver {
+
+    private final Map<String, PaymentProcessor> processors;
+
+    public PaymentProcessorResolver(List<PaymentProcessor> processors) {
+        this.processors = processors.stream()
+                .collect(Collectors.toMap(PaymentProcessor::getType, Function.identity()));
+    }
+
+    public PaymentProcessor resolve(String type) {
+        PaymentProcessor processor = processors.get(type);
+
+        if (processor == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tipo de pagamento nao suportado");
+        }
+
+        return processor;
+    }
+}
+```
+
+Por baixo dos panos, o Spring encontra todos os beans que implementam `PaymentProcessor` e entrega essa lista no construtor.
+
+### 5.6 Criar o PaymentService
+
+Crie `src/main/java/br/edu/upf/paymentapi/service/PaymentService.java`:
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import br.edu.upf.paymentapi.dto.PaymentStatsResponse;
+import br.edu.upf.paymentapi.model.Payment;
+import br.edu.upf.paymentapi.repository.PaymentRepository;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+@Service
+public class PaymentService {
+
+    private final PaymentProcessorResolver processorResolver;
+    private final PaymentRepository paymentRepository;
+
+    public PaymentService(
+            PaymentProcessorResolver processorResolver,
+            PaymentRepository paymentRepository
+    ) {
+        this.processorResolver = processorResolver;
+        this.paymentRepository = paymentRepository;
+    }
+
+    public Payment create(CreatePaymentRequest request) {
+        PaymentProcessor processor = processorResolver.resolve(request.type());
+        ProcessedPayment processedPayment = processor.process(request);
+
+        BigDecimal fee = processor.calculateFee(request.amount());
+        BigDecimal totalAmount = request.amount().add(fee);
+
+        Payment payment = new Payment();
+        payment.setType(request.type());
+        payment.setAmount(totalAmount);
+        payment.setStatus(determineStatus(request.amount(), request.type()));
+        payment.setCustomerName(request.customerName());
+        payment.setCustomerEmail(request.customerEmail());
+        payment.setMetadata(processedPayment.metadata());
+        payment.setCreatedAt(LocalDateTime.now());
+        payment.setUpdatedAt(LocalDateTime.now());
+
+        return paymentRepository.save(payment);
+    }
+
+    public List<Payment> findAll() {
+        return paymentRepository.findAll();
+    }
+
+    public Payment findById(String id) {
+        return paymentRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pagamento nao encontrado"));
+    }
+
+    public PaymentStatsResponse getStats() {
+        List<Payment> payments = paymentRepository.findAll();
+
+        BigDecimal totalAmount = payments.stream()
+                .map(Payment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Map<String, Long> byType = payments.stream()
+                .collect(Collectors.groupingBy(Payment::getType, Collectors.counting()));
+
+        return new PaymentStatsResponse(payments.size(), totalAmount, byType);
+    }
+
+    private String determineStatus(BigDecimal amount, String type) {
+        if (amount.compareTo(new BigDecimal("10000")) > 0) {
+            return "PENDING";
+        }
+
+        if ("CREDIT_CARD".equals(type) && amount.compareTo(new BigDecimal("5000")) > 0) {
+            return "PENDING";
+        }
+
+        return "APPROVED";
+    }
+}
+```
+
+Agora o service principal ficou menor. Ele coordena o caso de uso, mas não conhece os detalhes internos de PIX, cartão e boleto.
+
+### 5.7 Criar o PaymentController
+
+Crie `src/main/java/br/edu/upf/paymentapi/controller/PaymentController.java`:
+
+```java
+package br.edu.upf.paymentapi.controller;
+
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import br.edu.upf.paymentapi.dto.PaymentResponse;
+import br.edu.upf.paymentapi.dto.PaymentStatsResponse;
+import br.edu.upf.paymentapi.service.PaymentService;
+import jakarta.validation.Valid;
+import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/v1/payments")
+public class PaymentController {
+
+    private final PaymentService paymentService;
+
+    public PaymentController(PaymentService paymentService) {
+        this.paymentService = paymentService;
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public PaymentResponse create(@RequestBody @Valid CreatePaymentRequest request) {
+        return PaymentResponse.from(paymentService.create(request));
+    }
+
+    @GetMapping
+    public List<PaymentResponse> findAll() {
+        return paymentService.findAll()
+                .stream()
+                .map(PaymentResponse::from)
+                .toList();
+    }
+
+    @GetMapping("/{id}")
+    public PaymentResponse findById(@PathVariable String id) {
+        return PaymentResponse.from(paymentService.findById(id));
+    }
+
+    @GetMapping("/stats")
+    public PaymentStatsResponse getStats() {
+        return paymentService.getStats();
+    }
+}
+```
+
+## Passo 6: Executar e testar a API
+
+### 6.1 Subir o MongoDB
 
 ```bash
-# Criar módulo prisma
-nest g module database
-nest g service prisma --no-spec
+docker compose up -d
 ```
 
-Editar `src/database/prisma.service.ts`:
+### 6.2 Rodar a aplicação
 
-```typescript
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
-
-@Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
-  // Conecta ao banco quando o módulo é inicializado
-  async onModuleInit() {
-    await this.$connect();
-  }
-}
-```
-
-Editar `src/database/database.module.ts`:
-
-```typescript
-import { Module } from '@nestjs/common';
-import { PrismaService } from './prisma.service';
-
-@Module({
-  providers: [PrismaService],
-  exports: [PrismaService], // Exporta para outros módulos usarem
-})
-export class DatabaseModule {}
-```
-
-## Passo 4: Criar Módulo Legacy-Payment (Código Ruim - Sem SOLID)
-
-Vamos começar criando o módulo que **viola** os princípios SOLID para depois comparar com a implementação correta.
-
-### 4.1 Criar Módulo Legacy
+No Windows:
 
 ```bash
-# Criar módulo legacy-payment
-nest g module legacy-payment
-nest g service legacy-payment --no-spec
-nest g controller legacy-payment --no-spec
+gradlew.bat bootRun
 ```
 
-### 4.2 Criar DTO Legacy
+No Linux ou macOS:
 
 ```bash
-# Criar DTO usando NestJS CLI
-nest g class legacy-payment/dto/create-legacy-payment.dto --no-spec
+./gradlew bootRun
 ```
 
-Editar `src/legacy-payment/dto/create-legacy-payment.dto.ts`:
+### 6.3 Abrir o Swagger
 
-```typescript
-export class CreateLegacyPaymentDto {
-  type: string;
-  amount: number;
-  customerName: string;
-  customerEmail: string;
-  cardNumber?: string;
-  cvv?: string;
-  expiryDate?: string;
-  pixKey?: string;
-  dueDate?: string;
-}
+Acesse:
+
+```text
+http://localhost:8080/swagger-ui.html
 ```
 
-### 4.3 Criar Service Legacy
-
-Editar `src/legacy-payment/legacy-payment.service.ts`:
-
-```typescript
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
-import { CreateLegacyPaymentDto } from './dto/create-legacy-payment.dto/create-legacy-payment.dto';
-
-@Injectable()
-export class LegacyPaymentService {
-  constructor(private prisma: PrismaService) {}
-
-  // Método que viola todos os princípios SOLID
-  async createPayment(createPaymentDto: CreateLegacyPaymentDto) {
-    // Validação misturada com lógica de negócio
-    if (!createPaymentDto.customerName) {
-      throw new Error('Nome do cliente é obrigatório');
-    }
-
-    if (createPaymentDto.amount <= 0) {
-      throw new Error('Valor deve ser maior que zero');
-    }
-
-    // if/else gigante - viola OCP
-    let processedPayment;
-    if (createPaymentDto.type === 'CREDIT_CARD') {
-      processedPayment = this.processCreditCard(createPaymentDto);
-    } else if (createPaymentDto.type === 'PIX') {
-      processedPayment = this.processPix(createPaymentDto);
-    } else if (createPaymentDto.type === 'BOLETO') {
-      processedPayment = this.processBoleto(createPaymentDto);
-    } else {
-      throw new Error('Tipo de pagamento não suportado');
-    }
-
-    // Cálculo de taxa misturado
-    const fee = this.calculateFee(
-      createPaymentDto.amount,
-      createPaymentDto.type,
-    );
-    const totalAmount = createPaymentDto.amount + fee;
-
-    // Aplicação de regras misturada
-    const status = this.determineStatus(
-      createPaymentDto.amount,
-      createPaymentDto.type,
-    );
-
-    // Formatação de dados misturada
-    const formattedData = this.formatPaymentData(
-      createPaymentDto,
-      processedPayment,
-      totalAmount,
-      status,
-    );
-
-    // Persistência misturada
-    const payment = await this.prisma.payment.create({
-      data: {
-        ...formattedData,
-        // Converte metadata para o formato aceito pelo Prisma
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        metadata: formattedData.metadata
-          ? JSON.parse(JSON.stringify(formattedData.metadata))
-          : undefined,
-      },
-    });
-
-    // Envio de email separado do fluxo crítico, e aguardando completion
-    this.sendEmail(payment);
-
-    // Log misturado
-    console.log(`Pagamento ${payment.id} criado com sucesso`);
-
-    return payment;
-  }
-
-  // Métodos privados que fazem muitas coisas
-  private processCreditCard(dto: CreateLegacyPaymentDto) {
-    if (!dto.cardNumber || !dto.cvv || !dto.expiryDate) {
-      throw new Error('Dados do cartão são obrigatórios');
-    }
-
-    return {
-      cardNumber: dto.cardNumber.replace(/\d(?=\d{4})/g, '*'),
-      cvv: '***',
-      expiryDate: dto.expiryDate,
-      processor: this.detectCardProcessor(dto.cardNumber),
-      amount: dto.amount,
-    };
-  }
-
-  private processPix(dto: CreateLegacyPaymentDto) {
-    if (!dto.pixKey) {
-      throw new Error('Chave PIX é obrigatória');
-    }
-
-    return {
-      pixKey: dto.pixKey,
-      qrCode: `pix-qr-code-${Date.now()}`,
-      amount: dto.amount,
-    };
-  }
-
-  private processBoleto(dto: CreateLegacyPaymentDto) {
-    if (!dto.dueDate) {
-      throw new Error('Data de vencimento é obrigatória');
-    }
-
-    return {
-      boletoNumber: this.generateBoletoNumber(),
-      dueDate: new Date(dto.dueDate),
-      amount: dto.amount,
-    };
-  }
-
-  private calculateFee(amount: number, type: string): number {
-    if (type === 'CREDIT_CARD') {
-      return amount * 0.03; // 3%
-    } else if (type === 'PIX') {
-      return 0; // PIX é gratuito
-    } else if (type === 'BOLETO') {
-      return 2.5; // Taxa fixa
-    }
-    return 0;
-  }
-
-  private determineStatus(amount: number, type: string): string {
-    if (amount > 10000) {
-      return 'PENDING';
-    }
-    if (type === 'CREDIT_CARD' && amount > 5000) {
-      return 'PENDING';
-    }
-    return 'APPROVED';
-  }
-
-  private formatPaymentData(
-    dto: CreateLegacyPaymentDto,
-    processed: any,
-    total: number,
-    status: string,
-  ) {
-    return {
-      type: dto.type,
-      amount: total,
-      status,
-      customerName: dto.customerName.toUpperCase(),
-      customerEmail: dto.customerEmail.toLowerCase(),
-      metadata: processed as Record<string, unknown>,
-    };
-  }
-
-  private detectCardProcessor(cardNumber: string): string {
-    if (cardNumber.startsWith('4')) return 'Visa';
-    if (cardNumber.startsWith('5')) return 'Mastercard';
-    if (cardNumber.startsWith('3')) return 'American Express';
-    return 'Unknown';
-  }
-
-  private generateBoletoNumber(): string {
-    return '34191.79001 01043.510047 91020.150008 1 84460000020000';
-  }
-
-  private sendEmail(payment: any) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    console.log(`📧 Email enviado para ${payment.customerEmail}`);
-  }
-
-  // Outros métodos que violam SRP
-  async findAll() {
-    const payments = await this.prisma.payment.findMany();
-    return payments.map((p) => ({
-      ...p,
-      amount: `R$ ${Number(p.amount).toFixed(2)}`,
-      createdAt: p.createdAt.toISOString(),
-    }));
-  }
-
-  async findOne(id: string) {
-    const payment = await this.prisma.payment.findUnique({ where: { id } });
-    if (!payment) {
-      throw new Error('Pagamento não encontrado');
-    }
-    return {
-      ...payment,
-      amount: `R$ ${Number(payment.amount).toFixed(2)}`,
-      createdAt: payment.createdAt.toISOString(),
-    };
-  }
-
-  async getStats() {
-    const payments = await this.prisma.payment.findMany();
-    const totalAmount = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-    const byType = payments.reduce((acc, p) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      acc[p.type] = (acc[p.type] || 0) + 1;
-      return acc;
-    }, {});
-
-    return {
-      totalPayments: payments.length,
-      totalAmount: `R$ ${totalAmount.toFixed(2)}`,
-      byType: Object.entries(byType).map(([type, count]) => ({
-        type,
-        count,
-        percentage:
-          (((count as number) / payments.length) * 100).toFixed(1) + '%',
-      })),
-    };
-  }
-}
-
-```
-
-### 4.4 Criar Controller Legacy
-
-Editar `src/legacy-payment/legacy-payment.controller.ts`:
-
-```typescript
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { CreateLegacyPaymentDto } from './dto/create-legacy-payment.dto/create-legacy-payment.dto';
-import { LegacyPaymentService } from './legacy-payment.service';
-
-@ApiTags('legacy-payment')
-@Controller('legacy-payment')
-export class LegacyPaymentController {
-  constructor(private legacyPaymentService: LegacyPaymentService) {}
-
-  @Post()
-  @ApiOperation({ summary: 'Processar pagamento (código ruim)' })
-  @ApiResponse({ status: 201, description: 'Pagamento criado' })
-  @ApiResponse({ status: 400, description: 'Dados inválidos' })
-  async create(@Body() createPaymentDto: CreateLegacyPaymentDto) {
-    return this.legacyPaymentService.createPayment(createPaymentDto);
-  }
-
-  @Get()
-  @ApiOperation({ summary: 'Listar pagamentos (código ruim)' })
-  @ApiResponse({ status: 200, description: 'Lista de pagamentos' })
-  async findAll() {
-    return this.legacyPaymentService.findAll();
-  }
-
-  @Get(':id')
-  @ApiOperation({ summary: 'Buscar pagamento por ID (código ruim)' })
-  @ApiResponse({ status: 200, description: 'Pagamento encontrado' })
-  @ApiResponse({ status: 404, description: 'Pagamento não encontrado' })
-  async findOne(@Param('id') id: string) {
-    return this.legacyPaymentService.findOne(id);
-  }
-
-  @Get('stats/overview')
-  @ApiOperation({ summary: 'Estatísticas (código ruim)' })
-  @ApiResponse({ status: 200, description: 'Estatísticas calculadas' })
-  async getStats() {
-    return this.legacyPaymentService.getStats();
-  }
-}
-```
-
-### 4.5 Configurar Módulo Legacy
-
-Editar `src/legacy-payment/legacy-payment.module.ts`:
-
-```typescript
-import { Module } from '@nestjs/common';
-import { DatabaseModule } from 'src/database/database.module';
-import { LegacyPaymentController } from './legacy-payment.controller';
-import { LegacyPaymentService } from './legacy-payment.service';
-
-@Module({
-  imports: [DatabaseModule],
-  providers: [LegacyPaymentService],
-  controllers: [LegacyPaymentController],
-})
-export class LegacyPaymentModule {}
-
-```
-
-## Passo 5: Criar Módulos de Estratégia (PIX, Cartão, Boleto)
-
-### 5.1 Criar Módulo PIX
+### 6.4 Criar pagamento PIX na versão legacy
 
 ```bash
-nest g module pix
-nest g service pix --no-spec
+curl -X POST http://localhost:8080/api/v1/legacy-payments \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "PIX",
+    "amount": 100.50,
+    "customerName": "Joao Silva",
+    "customerEmail": "joao@email.com",
+    "pixKey": "joao@email.com"
+  }'
 ```
 
-Editar `src/pix/pix.service.ts`:
-
-```typescript
-import { Injectable } from '@nestjs/common';
-
-@Injectable()
-export class PixService {
-  // Processa pagamentos PIX
-  async process(valor: number, metadados: Record<string, unknown>) {
-    // Simula processamento de PIX
-    const chavePix = metadados.chavePix as string;
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    return {
-      idTransacao: this.gerarIdTransacao(),
-      status: 'PROCESSANDO',
-      dadosAdicionais: {
-        chavePix,
-        qrCode: this.gerarQrCode(chavePix),
-        valor,
-      },
-    };
-  }
-
-  // Calcula taxa do PIX (gratuita)
-  calcularTaxa(): number {
-    return 0;
-  }
-
-  // Retorna tipo de pagamento
-  obterTipo(): string {
-    return 'PIX';
-  }
-
-  // Gera QR Code para PIX
-  private gerarQrCode(chavePix: string): string {
-    return `pix-qr-code-${Date.now()}-${chavePix}`;
-  }
-
-  // Gera ID único para transação
-  private gerarIdTransacao(): string {
-    return `PIX_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-}
-
-```
-
-### 5.2 Criar Módulo PIX
-
-Editar `src/pix/pix.module.ts`:
-
-```typescript
-import { Module } from '@nestjs/common';
-import { PixService } from './pix.service';
-
-@Module({
-  providers: [PixService],
-  exports: [PixService],
-})
-export class PixModule {}
-```
-
-### 5.3 Criar Módulo Cartão de Crédito
+### 6.5 Criar pagamento PIX na versão com SOLID
 
 ```bash
-nest g module credit-card
-nest g service credit-card --no-spec
+curl -X POST http://localhost:8080/api/v1/payments \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "PIX",
+    "amount": 100.50,
+    "customerName": "Joao Silva",
+    "customerEmail": "joao@email.com",
+    "pixKey": "joao@email.com"
+  }'
 ```
 
-Editar `src/credit-card/credit-card.service.ts`:
-
-```typescript
-import { Injectable } from '@nestjs/common';
-
-@Injectable()
-export class CreditCardService {
-  // Processa pagamentos com cartão
-  async process(valor: number, metadados: Record<string, unknown>) {
-    const numeroCartao = metadados.numeroCartao as string;
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    
-    return {
-      idTransacao: this.gerarIdTransacao(),
-      status: 'PROCESSANDO',
-      dadosAdicionais: {
-        numeroCartao: this.mascararNumeroCartao(numeroCartao),
-        cvv: '***',
-        dataVencimento: metadados.dataVencimento,
-        processador: this.detectarProcessador(numeroCartao),
-        valor,
-      },
-    };
-  }
-
-  // Calcula taxa do cartão (3%)
-  calcularTaxa(valor: number): number {
-    return valor * 0.03;
-  }
-
-  // Retorna tipo de pagamento
-  obterTipo(): string {
-    return 'CARTAO_CREDITO';
-  }
-
-  // Mascara número do cartão para segurança
-  private mascararNumeroCartao(numeroCartao: string): string {
-    return numeroCartao.replace(/\d(?=\d{4})/g, '*');
-  }
-
-  // Detecta processador do cartão
-  private detectarProcessador(numeroCartao: string): string {
-    if (numeroCartao.startsWith('4')) return 'Visa';
-    if (numeroCartao.startsWith('5')) return 'Mastercard';
-    if (numeroCartao.startsWith('3')) return 'American Express';
-    return 'Desconhecido';
-  }
-
-  // Gera ID único para transação
-  private gerarIdTransacao(): string {
-    return `CC_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-}
-```
-
-### 5.4 Criar Módulo Cartão de Crédito
-
-Editar `src/credit-card/credit-card.module.ts`:
-
-```typescript
-import { Module } from '@nestjs/common';
-import { CreditCardService } from './credit-card.service';
-
-@Module({
-  providers: [CreditCardService],
-  exports: [CreditCardService],
-})
-export class CreditCardModule {}
-```
-
-### 5.5 Criar Módulo Boleto
+### 6.6 Criar pagamento com cartão
 
 ```bash
-nest g module boleto
-nest g service boleto --no-spec
+curl -X POST http://localhost:8080/api/v1/payments \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "CREDIT_CARD",
+    "amount": 250.00,
+    "customerName": "Maria Souza",
+    "customerEmail": "maria@email.com",
+    "cardNumber": "4111111111111111",
+    "cvv": "123",
+    "expiryDate": "12/2030"
+  }'
 ```
 
-Editar `src/boleto/boleto.service.ts`:
-
-```typescript
-import { Injectable } from '@nestjs/common';
-
-@Injectable()
-export class BoletoService {
-  // Processa pagamentos via boleto
-  async process(valor: number, metadados: Record<string, unknown>) {
-    const dataVencimento = metadados.dataVencimento as string;
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    
-    return {
-      idTransacao: this.gerarIdTransacao(),
-      status: 'PROCESSANDO',
-      dadosAdicionais: {
-        numeroBoleto: this.gerarNumeroBoleto(),
-        dataVencimento: new Date(dataVencimento),
-        valor,
-      },
-    };
-  }
-
-  // Calcula taxa do boleto (fixa)
-  calcularTaxa(): number {
-    return 2.5;
-  }
-
-  // Retorna tipo de pagamento
-  obterTipo(): string {
-    return 'BOLETO';
-  }
-
-  // Gera número do boleto
-  private gerarNumeroBoleto(): string {
-    return '34191.79001 01043.510047 91020.150008 1 84460000020000';
-  }
-
-  // Gera ID único para transação
-  private gerarIdTransacao(): string {
-    return `BOL_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-}
-```
-
-### 5.6 Criar Módulo Boleto
-
-Editar `src/boleto/boleto.module.ts`:
-
-```typescript
-import { Module } from '@nestjs/common';
-import { BoletoService } from './boleto.service';
-
-@Module({
-  providers: [BoletoService],
-  exports: [BoletoService],
-})
-export class BoletoModule {}
-```
-
-## Passo 6: Criar Módulo Payment (Código Bom com SOLID)
-
-### 6.1 Criar Interfaces
+### 6.7 Criar pagamento com boleto
 
 ```bash
-# Criar interfaces usando NestJS CLI
-nest g interface payment/interfaces/payment-strategy.interface --no-spec
+curl -X POST http://localhost:8080/api/v1/payments \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "BOLETO",
+    "amount": 80.00,
+    "customerName": "Carlos Lima",
+    "customerEmail": "carlos@email.com",
+    "dueDate": "2026-06-10"
+  }'
 ```
 
-Editar `src/payment/interfaces/payment-strategy.interface/payment-strategy.interface.interface.ts`:
+## Código completo
 
-```typescript
-// Interface para dados de processamento
-export interface DadosProcessamentoPagamento {
-  idTransacao: string;
-  status: string;
-  dadosAdicionais: Record<string, unknown>;
-}
+Ao final, a estrutura principal fica assim:
 
-// Interface para dados de pagamento
-export interface DadosPagamento {
-  id: string;
-  tipo: string;
-  valor: number;
-  status: string;
-  nomeCliente: string;
-  emailCliente: string;
-  metadados: Record<string, unknown>;
-  dataCriacao: Date;
-  dataAtualizacao: Date;
-}
-
-// Interface para estatísticas
-export interface EstatisticasPagamento {
-  totalPagamentos: number;
-  valorTotal: number;
-  pagamentosAprovados: number;
-  pagamentosPendentes: number;
-  pagamentosRejeitados: number;
-}
-
-// Interface para estratégias de pagamento
-export interface IPaymentStrategy {
-  process(
-    valor: number,
-    metadados: Record<string, unknown>,
-  ): Promise<DadosProcessamentoPagamento>;
-  calcularTaxa(valor?: number): number;
-  obterTipo(): string;
-}
-
-// Interface para repositório
-export interface IPaymentRepository {
-  criar(
-    dados: Omit<DadosPagamento, 'id' | 'dataCriacao' | 'dataAtualizacao'>,
-  ): Promise<DadosPagamento>;
-  buscarPorId(id: string): Promise<DadosPagamento | null>;
-  buscarTodos(): Promise<DadosPagamento[]>;
-  obterEstatisticas(): Promise<EstatisticasPagamento>;
-}
-
-```
-
-### 6.2 Criar DTOs
-
-```bash
-# Criar DTOs usando NestJS CLI
-nest g class payment/dto/create-payment.dto --no-spec
-```
-
-Editar `src/payment/dto/create-payment.dto.ts`:
-
-```typescript
-import { ApiProperty } from '@nestjs/swagger';
-
-export class CreatePaymentDto {
-  @ApiProperty({
-    description: 'Tipo do pagamento',
-    enum: ['CARTAO_CREDITO', 'PIX', 'BOLETO'],
-    example: 'PIX',
-  })
-  tipo: string;
-
-  @ApiProperty({
-    description: 'Valor do pagamento em reais',
-    example: 100.5,
-    minimum: 0.01,
-  })
-  valor: number;
-
-  @ApiProperty({
-    description: 'Nome completo do cliente',
-    example: 'João Silva',
-  })
-  nomeCliente: string;
-
-  @ApiProperty({
-    description: 'Email do cliente',
-    example: 'joao@email.com',
-    format: 'email',
-  })
-  emailCliente: string;
-
-  @ApiProperty({
-    description: 'Metadados específicos do tipo de pagamento',
-    example: { chavePix: 'joao@email.com' },
-    required: false,
-  })
-  metadados?: Record<string, unknown>;
-}
-
-```
-
-### 6.3 Criar Repositório
-
-```bash
-# Criar repositório usando NestJS CLI
-nest g class payment/repository/payment.repository --no-spec
-```
-
-Editar `src/payment/repository/payment.repository.ts`:
-
-```typescript
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../database/prisma.service';
-import type {
-  DadosPagamento,
-  EstatisticasPagamento,
-  IPaymentRepository,
-} from '../../interfaces/payment-strategy.interface/payment-strategy.interface.interface';
-
-@Injectable()
-export class PaymentRepository implements IPaymentRepository {
-  constructor(private prisma: PrismaService) {}
-
-  // Cria novo pagamento no banco
-  async criar(
-    dados: Omit<DadosPagamento, 'id' | 'dataCriacao' | 'dataAtualizacao'>,
-  ): Promise<DadosPagamento> {
-    const pagamento = await this.prisma.payment.create({
-      data: {
-        type: dados.tipo,
-        amount: dados.valor,
-        status: dados.status,
-        customerName: dados.nomeCliente,
-        customerEmail: dados.emailCliente,
-      },
-    });
-
-    return {
-      id: pagamento.id,
-      tipo: pagamento.type,
-      valor: Number(pagamento.amount),
-      status: pagamento.status,
-      nomeCliente: pagamento.customerName,
-      emailCliente: pagamento.customerEmail,
-      metadados: pagamento.metadata as Record<string, unknown>,
-      dataCriacao: pagamento.createdAt,
-      dataAtualizacao: pagamento.updatedAt,
-    };
-  }
-
-  // Busca pagamento por ID
-  async buscarPorId(id: string): Promise<DadosPagamento | null> {
-    const pagamento = await this.prisma.payment.findUnique({
-      where: { id },
-    });
-
-    if (!pagamento) return null;
-
-    return {
-      id: pagamento.id,
-      tipo: pagamento.type,
-      valor: Number(pagamento.amount),
-      status: pagamento.status,
-      nomeCliente: pagamento.customerName,
-      emailCliente: pagamento.customerEmail,
-      metadados: pagamento.metadata as Record<string, unknown>,
-      dataCriacao: pagamento.createdAt,
-      dataAtualizacao: pagamento.updatedAt,
-    };
-  }
-
-  // Busca todos os pagamentos
-  async buscarTodos(): Promise<DadosPagamento[]> {
-    const pagamentos = await this.prisma.payment.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return pagamentos.map((pagamento) => ({
-      id: pagamento.id,
-      tipo: pagamento.type,
-      valor: Number(pagamento.amount),
-      status: pagamento.status,
-      nomeCliente: pagamento.customerName,
-      emailCliente: pagamento.customerEmail,
-      metadados: pagamento.metadata as Record<string, unknown>,
-      dataCriacao: pagamento.createdAt,
-      dataAtualizacao: pagamento.updatedAt,
-    }));
-  }
-
-  // Calcula estatísticas dos pagamentos
-  async obterEstatisticas(): Promise<EstatisticasPagamento> {
-    const pagamentos = await this.prisma.payment.findMany();
-
-    const totalPagamentos = pagamentos.length;
-    const valorTotal = pagamentos.reduce((sum, p) => sum + Number(p.amount), 0);
-    const pagamentosAprovados = pagamentos.filter(
-      (p) => p.status === 'APROVADO',
-    ).length;
-    const pagamentosPendentes = pagamentos.filter(
-      (p) => p.status === 'PENDENTE',
-    ).length;
-    const pagamentosRejeitados = pagamentos.filter(
-      (p) => p.status === 'REJEITADO',
-    ).length;
-
-    return {
-      totalPagamentos,
-      valorTotal,
-      pagamentosAprovados,
-      pagamentosPendentes,
-      pagamentosRejeitados,
-    };
-  }
-}
-
-
-```
-
-### 6.4 Criar Service Principal
-
-```bash
-nest g module payment
-nest g service payment --no-spec
-nest g controller payment --no-spec
-```
-
-Editar `src/payment/payment.service.ts`:
-
-```typescript
-import { Inject, Injectable } from '@nestjs/common';
-import { BoletoService } from '../boleto/boleto.service';
-import { CreditCardService } from '../credit-card/credit-card.service';
-import { PixService } from '../pix/pix.service';
-import { CreatePaymentDto } from './dto/create-payment.dto/create-payment.dto';
-import type {
-  DadosPagamento,
-  EstatisticasPagamento,
-  IPaymentRepository,
-  IPaymentStrategy,
-} from './interfaces/payment-strategy.interface/payment-strategy.interface.interface';
-
-@Injectable()
-export class PaymentService {
-  private estrategias: Map<string, IPaymentStrategy>;
-
-  constructor(
-    @Inject('IPaymentRepository')
-    private repositorioPagamento: IPaymentRepository,
-    private servicoCartaoCredito: CreditCardService,
-    private servicoPix: PixService,
-    private servicoBoleto: BoletoService,
-  ) {
-    // Configura estratégias de pagamento
-    this.estrategias = new Map();
-    this.estrategias.set('CARTAO_CREDITO', servicoCartaoCredito);
-    this.estrategias.set('PIX', servicoPix);
-    this.estrategias.set('BOLETO', servicoBoleto);
-  }
-
-  // Cria novo pagamento
-  async criarPagamento(
-    dadosPagamento: CreatePaymentDto,
-  ): Promise<DadosPagamento> {
-    // Busca estratégia de pagamento
-    const estrategia = this.estrategias.get(dadosPagamento.tipo);
-    if (!estrategia) {
-      throw new Error('Tipo de pagamento não suportado');
-    }
-
-    // Processa pagamento usando estratégia específica
-    const pagamentoProcessado = await estrategia.process(
-      dadosPagamento.valor,
-      dadosPagamento.metadados || {},
-    );
-
-    // Calcula taxa usando estratégia
-    const taxa = estrategia.calcularTaxa(dadosPagamento.valor);
-    const valorTotal = dadosPagamento.valor + taxa;
-
-    // Determina status do pagamento
-    const status = this.determinarStatus(
-      dadosPagamento.valor,
-      dadosPagamento.tipo,
-    );
-
-    // Salva no banco de dados
-    const pagamento = await this.repositorioPagamento.criar({
-      tipo: dadosPagamento.tipo,
-      valor: valorTotal,
-      status,
-      nomeCliente: dadosPagamento.nomeCliente,
-      emailCliente: dadosPagamento.emailCliente,
-      metadados: pagamentoProcessado.dadosAdicionais,
-    });
-
-    return pagamento;
-  }
-
-  // Busca todos os pagamentos
-  async buscarTodos(): Promise<DadosPagamento[]> {
-    return this.repositorioPagamento.buscarTodos();
-  }
-
-  // Busca pagamento por ID
-  async buscarPorId(id: string): Promise<DadosPagamento | null> {
-    return this.repositorioPagamento.buscarPorId(id);
-  }
-
-  // Obtém estatísticas
-  async obterEstatisticas(): Promise<EstatisticasPagamento> {
-    return this.repositorioPagamento.obterEstatisticas();
-  }
-
-  // Determina status baseado em regras de negócio
-  private determinarStatus(valor: number, tipo: string): string {
-    if (valor > 10000) {
-      return 'PENDENTE'; // Precisa aprovação
-    }
-    if (tipo === 'CARTAO_CREDITO' && valor > 5000) {
-      return 'PENDENTE'; // Cartão alto valor
-    }
-    return 'APROVADO';
-  }
-}
-```
-
-### 6.5 Criar Controller
-
-Editar `src/payment/payment.controller.ts`:
-
-```typescript
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { CreatePaymentDto } from './dto/create-payment.dto/create-payment.dto';
-import { PaymentService } from './payment.service';
-
-@ApiTags('payment')
-@Controller('pagamentos')
-export class PaymentController {
-  constructor(private servicoPagamento: PaymentService) {}
-
-  @Post()
-  @ApiOperation({ summary: 'Processar pagamento' })
-  @ApiResponse({ status: 201, description: 'Pagamento criado com sucesso' })
-  @ApiResponse({ status: 400, description: 'Dados inválidos' })
-  async criar(@Body() dadosPagamento: CreatePaymentDto) {
-    return await this.servicoPagamento.criarPagamento(dadosPagamento);
-  }
-
-  @Get()
-  @ApiOperation({ summary: 'Listar todos os pagamentos' })
-  @ApiResponse({ status: 200, description: 'Lista de pagamentos' })
-  async buscarTodos() {
-    return await this.servicoPagamento.buscarTodos();
-  }
-
-  @Get(':id')
-  @ApiOperation({ summary: 'Buscar pagamento por ID' })
-  @ApiResponse({ status: 200, description: 'Pagamento encontrado' })
-  @ApiResponse({ status: 404, description: 'Pagamento não encontrado' })
-  async buscarPorId(@Param('id') id: string) {
-    return await this.servicoPagamento.buscarPorId(id);
-  }
-
-  @Get('estatisticas/visao-geral')
-  @ApiOperation({ summary: 'Obter estatísticas de pagamentos' })
-  @ApiResponse({ status: 200, description: 'Estatísticas calculadas' })
-  async obterEstatisticas() {
-    return await this.servicoPagamento.obterEstatisticas();
-  }
-}
-
-```
-
-### 6.6 Configurar Módulo Payment
-
-Editar `src/payment/payment.module.ts`:
-
-```typescript
-import { Module } from '@nestjs/common';
-import { BoletoModule } from '../boleto/boleto.module';
-import { CreditCardModule } from '../credit-card/credit-card.module';
-import { DatabaseModule } from '../database/database.module';
-import { PixModule } from '../pix/pix.module';
-import { PaymentController } from './payment.controller';
-import { PaymentService } from './payment.service';
-import { PaymentRepository } from './repository/payment.repository/payment.repository';
-
-@Module({
-  imports: [DatabaseModule, PixModule, CreditCardModule, BoletoModule],
-  controllers: [PaymentController],
-  providers: [
-    PaymentService,
-    {
-      provide: 'IPaymentRepository',
-      useClass: PaymentRepository,
-    },
-  ],
-})
-export class PaymentModule {}
-
-```
-
-## Passo 7: Configurar Swagger
-
-### 7.1 Configurar main.ts
-
-Editar `src/main.ts`:
-
-```typescript
-import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AppModule } from './app.module';
-
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
-  // Configuração do Swagger
-  const config = new DocumentBuilder()
-    .setTitle('Payment API - SOLID')
-    .setDescription('Demonstração dos princípios SOLID com NestJS')
-    .setVersion('1.0')
-    .addTag('legacy-payment', 'Módulo que viola SOLID (código ruim)')
-    .addTag('payment', 'Módulo que aplica SOLID (código bom)')
-    .build();
-
-  const document = SwaggerModule.createDocument(app as any, config);
-  SwaggerModule.setup('api', app as any, document);
-
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  await (app as any).listen(3000);
-}
-
-bootstrap();
-
-```
-
-### 7.2 Atualizar AppModule
-
-Editar `src/app.module.ts`:
-
-```typescript
-import { Module } from '@nestjs/common';
-import { DatabaseModule } from './database/database.module';
-import { PaymentModule } from './payment/payment.module';
-import { LegacyPaymentModule } from './legacy-payment/legacy-payment.module';
-
-@Module({
-  imports: [DatabaseModule, PaymentModule, LegacyPaymentModule],
-})
-export class AppModule {}
-```
-
-## Passo 8: Testando a API
-
-### 8.1 Iniciar Servidor
-
-```bash
-# Iniciar servidor de desenvolvimento
-npm run start:dev
-```
-
-### 8.2 Verificação Rápida
-
-Antes de testar os endpoints, confirme que tudo está funcionando:
-
-```bash
-# 1. Verificar se o banco está rodando
-docker ps
-
-# 2. Verificar se as dependências estão instaladas
-npm list --depth=0
-
-# 3. Verificar se o Prisma está configurado
-npx prisma db push
-
-# 4. Iniciar a aplicação
-npm run start:dev
-```
-
-**Se tudo estiver OK, você verá:**
-
-- Container PostgreSQL rodando
-- Dependências instaladas sem erros
-- Banco sincronizado com sucesso
-- Servidor rodando em `http://localhost:3000`
-
-### 8.3 Testar Endpoints via Swagger
-
-Acesse a documentação interativa do Swagger em: `http://localhost:3000/api`
-
-**Endpoints disponíveis:**
-
-**Módulo Payment (código bom)** 
-
-`/pagamentos`
-
-- `POST /pagamentos`: Criar pagamento
-- `GET /pagamentos`: Listar pagamentos
-- `GET /pagamentos/estatisticas/visao-geral`: Ver estatísticas
-
-**Módulo Legacy-Payment (código ruim)**
-
-`/legacy-payment`
-
-- `POST /legacy-payment`: Criar pagamento legacy
-- `GET /legacy-payment`: Listar pagamentos legacy
-- `GET /legacy-payment/stats/overview`: Ver estatísticas legacy
-
-**Como testar:**
-
-1. Abra o Swagger UI no navegador
-2. Expanda o endpoint desejado
-3. Clique em "Try it out"
-4. Preencha os dados de exemplo
-5. Clique em "Execute" para testar
-
-## Estrutura Final do Projeto
-
-Após seguir todo o tutorial, sua estrutura de projeto deve ficar assim:
-
-```
+```text
 payment-api/
-├── src/
-│   ├── app.controller.spec.ts
-│   ├── app.controller.ts
-│   ├── app.module.ts
-│   ├── app.service.ts
-│   ├── main.ts
-│   ├── database/
-│   │   ├── database.module.ts
-│   │   └── prisma.service.ts
-│   ├── payment/
-│   │   ├── dto/
-│   │   │   └── create-payment.dto/
-│   │   │       └── create-payment.dto.ts
-│   │   ├── interfaces/
-│   │   │   └── payment-strategy.interface/
-│   │   │       └── payment-strategy.interface.interface.ts
-│   │   ├── repository/
-│   │   │   └── payment.repository/
-│   │   │       └── payment.repository.ts
-│   │   ├── payment.controller.ts
-│   │   ├── payment.module.ts
-│   │   └── payment.service.ts
-│   ├── legacy-payment/
-│   │   ├── dto/
-│   │   │   └── create-legacy-payment.dto/
-│   │   │       └── create-legacy-payment.dto.ts
-│   │   ├── legacy-payment.controller.ts
-│   │   ├── legacy-payment.module.ts
-│   │   └── legacy-payment.service.ts
-│   ├── pix/
-│   │   ├── pix.module.ts
-│   │   └── pix.service.ts
-│   ├── credit-card/
-│   │   ├── credit-card.module.ts
-│   │   └── credit-card.service.ts
-│   └── boleto/
-│       ├── boleto.module.ts
-│       └── boleto.service.ts
-├── prisma/
-│   ├── migrations/
-│   │   ├── 20251027162427_init/
-│   │   │   └── migration.sql
-│   │   └── migration_lock.toml
-│   └── schema.prisma
-├── test/
-│   ├── app.e2e-spec.ts
-│   └── jest-e2e.json
-├── .gitignore
-├── eslint.config.mjs
-├── nest-cli.json
-├── package.json
-├── package-lock.json
-├── README.md
-├── tsconfig.build.json
-└── tsconfig.json
+├── build.gradle
+├── docker-compose.yml
+└── src/main/
+    ├── java/br/edu/upf/paymentapi/
+    │   ├── PaymentApiApplication.java
+    │   ├── config/
+    │   │   └── OpenApiConfig.java
+    │   ├── controller/
+    │   │   ├── LegacyPaymentController.java
+    │   │   └── PaymentController.java
+    │   ├── dto/
+    │   │   ├── CreatePaymentRequest.java
+    │   │   ├── PaymentResponse.java
+    │   │   └── PaymentStatsResponse.java
+    │   ├── model/
+    │   │   └── Payment.java
+    │   ├── repository/
+    │   │   └── PaymentRepository.java
+    │   └── service/
+    │       ├── LegacyPaymentService.java
+    │       ├── PaymentService.java
+    │       ├── PaymentProcessor.java
+    │       ├── PaymentProcessorResolver.java
+    │       ├── ProcessedPayment.java
+    │       ├── PixPaymentProcessor.java
+    │       ├── CreditCardPaymentProcessor.java
+    │       └── BoletoPaymentProcessor.java
+    └── resources/
+        └── application.properties
 ```
 
-### Arquivos Principais
+## Erros comuns
 
-**Configuração:**
+- Esquecer de subir o MongoDB antes de rodar a aplicação.
+- Usar `localhost` dentro de outro container. Dentro de containers, o host precisa ser o nome do serviço no Docker Compose.
+- Esquecer `authSource=admin` na URI do MongoDB quando usar usuário root.
+- Colocar regra de negócio no controller.
+- Criar strategy para tudo antes de existir variação real.
+- Usar `@Autowired` em atributo em vez de construtor.
+- Alterar o service legacy para ficar bom antes da comparação. Ele deve ficar ruim de propósito para a aula fazer sentido.
 
-- `package.json` - Dependências do projeto
-- `nest-cli.json` - Configuração do NestJS CLI
-- `tsconfig.json` - Configuração do TypeScript
-- `eslint.config.mjs` - Configuração do ESLint
+## Resumo
 
-**Banco de Dados:**
+Construímos uma Payment API em Java 17 com Spring Boot e MongoDB.
 
-- `prisma/schema.prisma` - Schema do banco
-- `prisma/migrations/20251027162427_init/` - Migração inicial
-- `prisma/migration_lock.toml` - Lock de migrações
+Primeiro criamos a versão `legacy-payment`, que funciona, mas mistura responsabilidades. Depois criamos a versão `payments`, separando o processamento de cada tipo de pagamento em estratégias.
 
-**Código Principal:**
-
-- `src/main.ts` - Ponto de entrada da aplicação
-- `src/app.module.ts` - Módulo principal
-- `src/app.controller.ts` - Controller principal
-- `src/app.controller.spec.ts` - Testes do controller
-- `src/database/` - Configuração do Prisma
-
-**Módulos de Pagamento:**
-
-- `src/payment/` - Módulo SOLID (código bom)
-  - `dto/create-payment.dto/` - DTOs de criação
-  - `interfaces/payment-strategy.interface/` - Interface de estratégia
-  - `repository/payment.repository/` - Repositório de pagamentos
-- `src/legacy-payment/` - Módulo legacy (código ruim)
-  - `dto/create-legacy-payment.dto/` - DTOs legacy
-- `src/pix/`, `src/credit-card/`, `src/boleto/` - Serviços específicos
-
-**Testes:**
-
-- `test/app.e2e-spec.ts` - Testes end-to-end
-- `test/jest-e2e.json` - Configuração do Jest para E2E
-
-
+Essa diferença mostra SOLID na prática: não como teoria isolada, mas como uma forma de deixar o código mais fácil de alterar quando o sistema cresce.
