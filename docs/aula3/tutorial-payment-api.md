@@ -281,13 +281,13 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Data
-@NoArgsConstructor
+@Builder
 @Document(collection = "payments")
 public class Payment {
 
@@ -306,7 +306,11 @@ public class Payment {
 
 `@Document` informa ao Spring Data MongoDB que essa classe representa documentos da coleção `payments`.
 
-`@Data` e `@NoArgsConstructor` vêm do Lombok. Eles geram getters, setters e construtor vazio em tempo de compilação. Por isso a classe fica curta, mas o restante do código ainda consegue chamar métodos como `payment.getId()` e `payment.setAmount(...)`.
+`@Data` vem do Lombok e gera getters, setters, `equals`, `hashCode` e `toString` em tempo de compilação. Como nenhum campo é `final` ou `@NonNull`, o `@Data` também gera um construtor sem argumentos, o que o Spring Data MongoDB precisa para reconstruir objetos ao ler o banco.
+
+`@Builder` gera uma API de construção fluente para essa classe. Em vez de criar o objeto e chamar vários setters um a um, o código que monta o `Payment` vai poder usar `Payment.builder().type(...).amount(...).build()`. Isso vai ficar evidente quando criarmos o `PaymentMapper` mais adiante.
+
+Uma coisa importante: evite colocar lógica de negócio dentro do `Payment` ou de qualquer DTO. Esse objeto representa apenas o documento salvo no banco. Cálculos, validações e transformações pertencem às camadas de serviço.
 
 ### 2.2 Criar o repository
 
@@ -548,6 +552,10 @@ public class LegacyPaymentService {
             return new BigDecimal("2.50");
         }
 
+        if ("CRYPTO".equals(type)) {
+            return new BigDecimal("1.50");
+        }
+
         return BigDecimal.ZERO;
     }
 
@@ -587,11 +595,11 @@ public class LegacyPaymentService {
 
 Esse código é útil para aula porque deixa os problemas visíveis:
 
-- muitos motivos para mudar
-- `if` crescendo conforme entram novos tipos
-- processamento de pagamento misturado com persistência
-- notificação misturada no fluxo principal
-- difícil testar cada tipo de pagamento isoladamente
+- muitos motivos para mudar: a mesma classe toca validação, processamento, cálculo de taxa, persistência e notificação
+- cada novo tipo de pagamento exige abrir o mesmo service e adicionar mais um `if`, como o `CRYPTO` que foi adicionado depois
+- o método `calculateFee` cresce indefinidamente: PIX, BOLETO, CREDIT_CARD, CRYPTO... e por aí vai
+- difícil testar um tipo de pagamento isoladamente sem passar por todo o método `create`
+- o `System.out.println` para notificação misturado no meio do fluxo principal torna a extração futura ainda mais difícil
 
 ### 4.2 Criar o LegacyPaymentController
 
@@ -657,20 +665,118 @@ O controller está aceitável: ele recebe HTTP, valida o body com `@Valid` e del
 
 Agora vamos criar a versão melhorada.
 
-A mudança principal é tirar o processamento específico de cada tipo de pagamento do service principal.
+Vamos aplicar três princípios SOLID de forma clara:
 
-### 5.1 Criar objetos de apoio
+- SRP: cada classe com uma única responsabilidade
+- OCP: Strategy Pattern para que novos tipos de pagamento entrem sem modificar o service principal
+- DIP: o service depende de abstrações, não de implementações
+
+A mudança acontece em três frentes:
+
+- `ValidatePayment` assume a responsabilidade de determinar o status do pagamento
+- `PaymentMapper` assume a responsabilidade de construir o objeto `Payment` antes de salvar
+- A interface `PaymentProcessor` e suas implementações assumem o processamento específico de cada tipo
+
+### 5.1 Criar ValidatePayment
+
+No `LegacyPaymentService`, a lógica de status estava misturada dentro do mesmo método que também validava dados, calculava taxa e persistia. Agora ela ganha uma classe própria.
+
+Crie `src/main/java/br/edu/upf/paymentapi/service/ValidatePayment.java`:
+
+```java
+package br.edu.upf.paymentapi.service;
+
+import java.math.BigDecimal;
+import org.springframework.stereotype.Component;
+
+@Component
+public class ValidatePayment {
+
+    public String determineStatus(BigDecimal amount, String type) {
+        if (amount.compareTo(new BigDecimal("10000")) > 0) {
+            return "PENDING";
+        }
+
+        if ("CREDIT_CARD".equals(type) && amount.compareTo(new BigDecimal("5000")) > 0) {
+            return "PENDING";
+        }
+
+        return "APPROVED";
+    }
+}
+```
+
+Essa classe só faz uma coisa: dado um valor e um tipo, diz qual status o pagamento deve ter.
+
+### 5.2 Criar ProcessedPayment
+
+Esse record representa o resultado do processamento de um pagamento antes de ser salvo.
 
 Crie `src/main/java/br/edu/upf/paymentapi/service/ProcessedPayment.java`:
 
 ```java
 package br.edu.upf.paymentapi.service;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
-public record ProcessedPayment(Map<String, Object> metadata) {
+public record ProcessedPayment(
+        BigDecimal fee,
+        Map<String, Object> metadata
+) {
 }
 ```
+
+O `fee` sai do record para que o `PaymentMapper` consiga calcular o total sem precisar chamar o processor novamente.
+
+### 5.3 Criar PaymentMapper
+
+No `LegacyPaymentService`, a construção manual do objeto `Payment` estava espalhada no meio do fluxo principal. Agora ela vai para um mapper dedicado.
+
+Crie a pasta:
+
+```text
+src/main/java/br/edu/upf/paymentapi/mappers
+```
+
+Crie `src/main/java/br/edu/upf/paymentapi/mappers/PaymentMapper.java`:
+
+```java
+package br.edu.upf.paymentapi.mappers;
+
+import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import br.edu.upf.paymentapi.model.Payment;
+import br.edu.upf.paymentapi.service.ProcessedPayment;
+import java.time.LocalDateTime;
+import org.springframework.stereotype.Component;
+
+@Component
+public class PaymentMapper {
+
+    public Payment toPayment(CreatePaymentRequest request, ProcessedPayment processed, String status) {
+        return Payment.builder()
+                .type(request.type())
+                .amount(request.amount().add(processed.fee()))
+                .status(status)
+                .customerName(request.customerName().toUpperCase())
+                .customerEmail(request.customerEmail().toLowerCase())
+                .metadata(processed.metadata())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
+}
+```
+
+O mapper recebe três entradas: o request com os dados do cliente, o resultado do processamento com a taxa e os metadados, e o status calculado. Com isso, monta e devolve um `Payment` pronto para persistência.
+
+Usar `Payment.builder()` em vez de criar o objeto e chamar setters um a um tem uma vantagem prática: torna imediatamente visível que o `Payment` está sendo construído com todos os campos necessários num único ponto, sem risco de esquecer de atribuir um campo no meio de outros métodos.
+
+O `PaymentMapper` não decide taxa, não valida tipo, não determina status. Só constrói. Isso é SRP funcionando: uma responsabilidade por classe.
+
+### 5.4 Criar a interface PaymentProcessor
+
+Essa interface é o contrato que cada estratégia de pagamento deve cumprir.
 
 Crie `src/main/java/br/edu/upf/paymentapi/service/PaymentProcessor.java`:
 
@@ -678,21 +784,16 @@ Crie `src/main/java/br/edu/upf/paymentapi/service/PaymentProcessor.java`:
 package br.edu.upf.paymentapi.service;
 
 import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
-import java.math.BigDecimal;
 
 public interface PaymentProcessor {
 
     String getType();
 
     ProcessedPayment process(CreatePaymentRequest request);
-
-    BigDecimal calculateFee(BigDecimal amount);
 }
 ```
 
-Essa interface é o contrato das estratégias de pagamento.
-
-### 5.2 Criar o processador PIX
+### 5.5 Criar o processador PIX
 
 Crie `src/main/java/br/edu/upf/paymentapi/service/PixPaymentProcessor.java`:
 
@@ -720,20 +821,18 @@ public class PixPaymentProcessor implements PaymentProcessor {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chave PIX e obrigatoria");
         }
 
-        return new ProcessedPayment(Map.of(
-                "pixKey", request.pixKey(),
-                "qrCode", "pix-qr-code-" + System.currentTimeMillis()
-        ));
-    }
-
-    @Override
-    public BigDecimal calculateFee(BigDecimal amount) {
-        return BigDecimal.ZERO;
+        return new ProcessedPayment(
+                BigDecimal.ZERO,
+                Map.of(
+                        "pixKey", request.pixKey(),
+                        "qrCode", "pix-qr-code-" + System.currentTimeMillis()
+                )
+        );
     }
 }
 ```
 
-### 5.3 Criar o processador de cartão
+### 5.6 Criar o processador de cartão
 
 Crie `src/main/java/br/edu/upf/paymentapi/service/CreditCardPaymentProcessor.java`:
 
@@ -750,6 +849,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class CreditCardPaymentProcessor implements PaymentProcessor {
 
+    private static final BigDecimal FEE_RATE = new BigDecimal("0.03");
+
     @Override
     public String getType() {
         return "CREDIT_CARD";
@@ -761,17 +862,15 @@ public class CreditCardPaymentProcessor implements PaymentProcessor {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dados do cartao sao obrigatorios");
         }
 
-        return new ProcessedPayment(Map.of(
-                "cardNumber", maskCard(request.cardNumber()),
-                "cvv", "***",
-                "expiryDate", request.expiryDate(),
-                "processor", detectCardProcessor(request.cardNumber())
-        ));
-    }
-
-    @Override
-    public BigDecimal calculateFee(BigDecimal amount) {
-        return amount.multiply(new BigDecimal("0.03"));
+        return new ProcessedPayment(
+                request.amount().multiply(FEE_RATE),
+                Map.of(
+                        "cardNumber", maskCard(request.cardNumber()),
+                        "cvv", "***",
+                        "expiryDate", request.expiryDate(),
+                        "processor", detectCardProcessor(request.cardNumber())
+                )
+        );
     }
 
     private String maskCard(String cardNumber) {
@@ -792,7 +891,7 @@ public class CreditCardPaymentProcessor implements PaymentProcessor {
 }
 ```
 
-### 5.4 Criar o processador de boleto
+### 5.7 Criar o processador de boleto
 
 Crie `src/main/java/br/edu/upf/paymentapi/service/BoletoPaymentProcessor.java`:
 
@@ -809,6 +908,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class BoletoPaymentProcessor implements PaymentProcessor {
 
+    private static final BigDecimal BOLETO_FEE = new BigDecimal("2.50");
+
     @Override
     public String getType() {
         return "BOLETO";
@@ -820,20 +921,18 @@ public class BoletoPaymentProcessor implements PaymentProcessor {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Data de vencimento e obrigatoria");
         }
 
-        return new ProcessedPayment(Map.of(
-                "boletoNumber", "34191.79001 01043.510047 91020.150008 1 84460000020000",
-                "dueDate", request.dueDate()
-        ));
-    }
-
-    @Override
-    public BigDecimal calculateFee(BigDecimal amount) {
-        return new BigDecimal("2.50");
+        return new ProcessedPayment(
+                BOLETO_FEE,
+                Map.of(
+                        "boletoNumber", "34191.79001 01043.510047 91020.150008 1 84460000020000",
+                        "dueDate", request.dueDate()
+                )
+        );
     }
 }
 ```
 
-### 5.5 Criar o resolver de estratégias
+### 5.8 Criar o resolver de estratégias
 
 Crie `src/main/java/br/edu/upf/paymentapi/service/PaymentProcessorResolver.java`:
 
@@ -870,9 +969,9 @@ public class PaymentProcessorResolver {
 }
 ```
 
-Por baixo dos panos, o Spring encontra todos os beans que implementam `PaymentProcessor` e entrega essa lista no construtor.
+O Spring encontra todos os beans que implementam `PaymentProcessor` e entrega a lista no construtor. O resolver monta um mapa por tipo e entrega o processador certo quando o service pedir.
 
-### 5.6 Criar o PaymentService
+### 5.9 Criar o PaymentService
 
 Crie `src/main/java/br/edu/upf/paymentapi/service/PaymentService.java`:
 
@@ -881,10 +980,10 @@ package br.edu.upf.paymentapi.service;
 
 import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
 import br.edu.upf.paymentapi.dto.PaymentStatsResponse;
+import br.edu.upf.paymentapi.mappers.PaymentMapper;
 import br.edu.upf.paymentapi.model.Payment;
 import br.edu.upf.paymentapi.repository.PaymentRepository;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -897,31 +996,27 @@ public class PaymentService {
 
     private final PaymentProcessorResolver processorResolver;
     private final PaymentRepository paymentRepository;
+    private final PaymentMapper paymentMapper;
+    private final ValidatePayment validatePayment;
 
     public PaymentService(
             PaymentProcessorResolver processorResolver,
-            PaymentRepository paymentRepository
+            PaymentRepository paymentRepository,
+            PaymentMapper paymentMapper,
+            ValidatePayment validatePayment
     ) {
         this.processorResolver = processorResolver;
         this.paymentRepository = paymentRepository;
+        this.paymentMapper = paymentMapper;
+        this.validatePayment = validatePayment;
     }
 
     public Payment create(CreatePaymentRequest request) {
         PaymentProcessor processor = processorResolver.resolve(request.type());
-        ProcessedPayment processedPayment = processor.process(request);
+        ProcessedPayment processed = processor.process(request);
 
-        BigDecimal fee = processor.calculateFee(request.amount());
-        BigDecimal totalAmount = request.amount().add(fee);
-
-        Payment payment = new Payment();
-        payment.setType(request.type());
-        payment.setAmount(totalAmount);
-        payment.setStatus(determineStatus(request.amount(), request.type()));
-        payment.setCustomerName(request.customerName());
-        payment.setCustomerEmail(request.customerEmail());
-        payment.setMetadata(processedPayment.metadata());
-        payment.setCreatedAt(LocalDateTime.now());
-        payment.setUpdatedAt(LocalDateTime.now());
+        String status = validatePayment.determineStatus(request.amount(), request.type());
+        Payment payment = paymentMapper.toPayment(request, processed, status);
 
         return paymentRepository.save(payment);
     }
@@ -947,24 +1042,19 @@ public class PaymentService {
 
         return new PaymentStatsResponse(payments.size(), totalAmount, byType);
     }
-
-    private String determineStatus(BigDecimal amount, String type) {
-        if (amount.compareTo(new BigDecimal("10000")) > 0) {
-            return "PENDING";
-        }
-
-        if ("CREDIT_CARD".equals(type) && amount.compareTo(new BigDecimal("5000")) > 0) {
-            return "PENDING";
-        }
-
-        return "APPROVED";
-    }
 }
 ```
 
-Agora o service principal ficou menor. Ele coordena o caso de uso, mas não conhece os detalhes internos de PIX, cartão e boleto.
+Compare o `create` agora com o do `LegacyPaymentService`:
 
-### 5.7 Criar o PaymentController
+```text
+// Legacy: 30 linhas misturando if, calculo, persistencia, log
+// Refatorado: 4 linhas, cada uma delegando para quem entende do assunto
+```
+
+O service não sabe mais como PIX funciona. Não sabe mais calcular taxa de cartão. Não sabe mais como construir um objeto `Payment`. Cada responsabilidade foi para a classe certa.
+
+### 5.10 Criar o PaymentController
 
 Crie `src/main/java/br/edu/upf/paymentapi/controller/PaymentController.java`:
 
@@ -1130,6 +1220,8 @@ payment-api/
     │   │   ├── CreatePaymentRequest.java
     │   │   ├── PaymentResponse.java
     │   │   └── PaymentStatsResponse.java
+    │   ├── mappers/
+    │   │   └── PaymentMapper.java
     │   ├── model/
     │   │   └── Payment.java
     │   ├── repository/
@@ -1140,6 +1232,7 @@ payment-api/
     │       ├── PaymentProcessor.java
     │       ├── PaymentProcessorResolver.java
     │       ├── ProcessedPayment.java
+    │       ├── ValidatePayment.java
     │       ├── PixPaymentProcessor.java
     │       ├── CreditCardPaymentProcessor.java
     │       └── BoletoPaymentProcessor.java
@@ -1156,11 +1249,21 @@ payment-api/
 - Criar strategy para tudo antes de existir variação real.
 - Usar `@Autowired` em atributo em vez de construtor.
 - Alterar o service legacy para ficar bom antes da comparação. Ele deve ficar ruim de propósito para a aula fazer sentido.
+- Colocar lógica de negócio dentro de um DTO ou record. Um DTO representa dados de transporte; calcular taxa, determinar status ou transformar valores dentro dele viola SRP. Se aparecer um método de negócio dentro de um record que representa entrada ou saída da API, isso é um sinal de que a lógica foi parar no lugar errado.
+- Criar um `PaymentDTO` no pacote `model` para carregar resultado intermediário. O lugar correto para um objeto que transporta dados entre as camadas internas do service é o pacote `service` (como o `ProcessedPayment`). O pacote `model` existe para representar documentos do banco.
 
 ## Resumo
 
 Construímos uma Payment API em Java 17 com Spring Boot e MongoDB.
 
-Primeiro criamos a versão `legacy-payment`, que funciona, mas mistura responsabilidades. Depois criamos a versão `payments`, separando o processamento de cada tipo de pagamento em estratégias.
+Primeiro criamos a versão `legacy-payment`, que funciona mas mistura responsabilidades dentro do mesmo service: validação, construção do objeto, cálculo de taxa, determinação de status e persistência convivem no mesmo método.
 
-Essa diferença mostra SOLID na prática: não como teoria isolada, mas como uma forma de deixar o código mais fácil de alterar quando o sistema cresce.
+Depois criamos a versão `payments`, onde cada responsabilidade foi para uma classe específica:
+
+- `ValidatePayment` decide o status
+- `PaymentMapper` constrói o objeto `Payment`
+- Cada `*PaymentProcessor` cuida do seu tipo
+- `PaymentProcessorResolver` encontra o processador certo
+- `PaymentService` só orquestra
+
+Isso mostra SOLID na prática: não como teoria, mas como uma forma de deixar o código mais fácil de alterar. Se amanhã entrar PIX parcelado, só precisamos criar uma nova classe que implementa `PaymentProcessor`. Nenhuma outra classe muda.
