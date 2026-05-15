@@ -270,7 +270,28 @@ docker compose down
 
 ## Passo 2: Criar o model e o repository
 
-### 2.1 Criar o documento Payment
+### 2.1 Criar o enum PaymentType
+
+Antes de criar o documento, vamos definir os tipos de pagamento possíveis como um enum.
+
+Crie `src/main/java/br/edu/upf/paymentapi/model/PaymentType.java`:
+
+```java
+package br.edu.upf.paymentapi.model;
+
+public enum PaymentType {
+    PIX,
+    CREDIT_CARD,
+    BOLETO,
+    CRYPTO
+}
+```
+
+Usar enum em vez de `String` traz uma vantagem imediata: se alguém enviar `"DEBITO"` no request, o Spring vai rejeitar com `400` automaticamente antes mesmo de chegar no service. Com `String`, esse erro só apareceria lá dentro, depois de passar por vários ifs. Outra vantagem é que a IDE aponta exatamente onde o tipo é usado e quais valores são válidos, sem precisar buscar por strings espalhadas no código.
+
+Jackson (a biblioteca que o Spring usa para serializar/deserializar JSON) converte enum por nome por padrão. Então `"PIX"` no JSON vira `PaymentType.PIX` em Java, e vice-versa, sem nenhuma configuração extra.
+
+### 2.2 Criar o documento Payment
 
 Crie `src/main/java/br/edu/upf/paymentapi/model/Payment.java`:
 
@@ -281,19 +302,23 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Document(collection = "payments")
 public class Payment {
 
     @Id
     private String id;
-    private String type;
+    private PaymentType type;
     private BigDecimal amount;
     private String status;
     private String customerName;
@@ -306,13 +331,15 @@ public class Payment {
 
 `@Document` informa ao Spring Data MongoDB que essa classe representa documentos da coleção `payments`.
 
-`@Data` vem do Lombok e gera getters, setters, `equals`, `hashCode` e `toString` em tempo de compilação. Como nenhum campo é `final` ou `@NonNull`, o `@Data` também gera um construtor sem argumentos, o que o Spring Data MongoDB precisa para reconstruir objetos ao ler o banco.
+`@Data` gera getters, setters, `equals`, `hashCode` e `toString`.
 
-`@Builder` gera uma API de construção fluente para essa classe. Em vez de criar o objeto e chamar vários setters um a um, o código que monta o `Payment` vai poder usar `Payment.builder().type(...).amount(...).build()`. Isso vai ficar evidente quando criarmos o `PaymentMapper` mais adiante.
+`@Builder` gera a API de construção fluente `Payment.builder()...build()` que o `PaymentMapper` vai usar. Quando `@Builder` está sozinho, o Lombok gera um construtor all-args de visibilidade de pacote. Ao usar `@Builder` junto com `@NoArgsConstructor`, é obrigatório declarar `@AllArgsConstructor` explicitamente, porque o Lombok não consegue gerar o construtor all-args do builder se um construtor sem argumentos já foi declarado. Com os dois explícitos, o Lombok sabe que pode usar o all-args para o builder e o no-args fica disponível para o Spring Data MongoDB ao reconstruir documentos do banco.
 
-Uma coisa importante: evite colocar lógica de negócio dentro do `Payment` ou de qualquer DTO. Esse objeto representa apenas o documento salvo no banco. Cálculos, validações e transformações pertencem às camadas de serviço.
+O campo `type` passou de `String` para `PaymentType`. Isso elimina a possibilidade de alguém passar `"DEBITO"` ou `"pix"` sem que o sistema perceba na borda de entrada.
 
-### 2.2 Criar o repository
+Evite colocar lógica de negócio dentro do `Payment`. Esse objeto representa apenas o documento salvo no banco. Cálculos, validações e transformações pertencem às camadas de serviço.
+
+### 2.3 Criar o repository
 
 Crie `src/main/java/br/edu/upf/paymentapi/repository/PaymentRepository.java`:
 
@@ -339,6 +366,7 @@ Crie `src/main/java/br/edu/upf/paymentapi/dto/CreatePaymentRequest.java`:
 ```java
 package br.edu.upf.paymentapi.dto;
 
+import br.edu.upf.paymentapi.model.PaymentType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -346,7 +374,7 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 
 public record CreatePaymentRequest(
-        @NotBlank String type,
+        @NotNull PaymentType type,
         @NotNull @DecimalMin("0.01") BigDecimal amount,
         @NotBlank String customerName,
         @NotBlank @Email String customerEmail,
@@ -361,6 +389,8 @@ public record CreatePaymentRequest(
 
 Usamos `record` porque DTO é só transporte de dados. Ele não precisa ter regra de negócio.
 
+O campo `type` agora é `PaymentType`. A anotação passou de `@NotBlank` para `@NotNull` porque `@NotBlank` é exclusiva de `String`: ela verifica se o texto não está vazio. Para um enum, a verificação correta é `@NotNull`, que garante que o campo foi informado. Se o JSON vier com `"type": "DEBITO"`, o Spring vai rejeitar imediatamente com `400 Bad Request` antes do request chegar no service, sem nenhum código adicional.
+
 ### 3.2 Response de pagamento
 
 Crie `src/main/java/br/edu/upf/paymentapi/dto/PaymentResponse.java`:
@@ -369,13 +399,14 @@ Crie `src/main/java/br/edu/upf/paymentapi/dto/PaymentResponse.java`:
 package br.edu.upf.paymentapi.dto;
 
 import br.edu.upf.paymentapi.model.Payment;
+import br.edu.upf.paymentapi.model.PaymentType;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
 
 public record PaymentResponse(
         String id,
-        String type,
+        PaymentType type,
         BigDecimal amount,
         String status,
         String customerName,
@@ -410,13 +441,14 @@ Crie `src/main/java/br/edu/upf/paymentapi/dto/PaymentStatsResponse.java`:
 ```java
 package br.edu.upf.paymentapi.dto;
 
+import br.edu.upf.paymentapi.model.PaymentType;
 import java.math.BigDecimal;
 import java.util.Map;
 
 public record PaymentStatsResponse(
         long totalPayments,
         BigDecimal totalAmount,
-        Map<String, Long> byType
+        Map<PaymentType, Long> byType
 ) {
 }
 ```
@@ -437,6 +469,7 @@ package br.edu.upf.paymentapi.service;
 import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
 import br.edu.upf.paymentapi.dto.PaymentStatsResponse;
 import br.edu.upf.paymentapi.model.Payment;
+import br.edu.upf.paymentapi.model.PaymentType;
 import br.edu.upf.paymentapi.repository.PaymentRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -462,14 +495,14 @@ public class LegacyPaymentService {
 
         Map<String, Object> metadata = new HashMap<>();
 
-        if ("PIX".equals(request.type())) {
+        if (request.type() == PaymentType.PIX) {
             if (request.pixKey() == null || request.pixKey().isBlank()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chave PIX e obrigatoria");
             }
 
             metadata.put("pixKey", request.pixKey());
             metadata.put("qrCode", "pix-qr-code-" + System.currentTimeMillis());
-        } else if ("CREDIT_CARD".equals(request.type())) {
+        } else if (request.type() == PaymentType.CREDIT_CARD) {
             if (request.cardNumber() == null || request.cvv() == null || request.expiryDate() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dados do cartao sao obrigatorios");
             }
@@ -478,7 +511,7 @@ public class LegacyPaymentService {
             metadata.put("cvv", "***");
             metadata.put("expiryDate", request.expiryDate());
             metadata.put("processor", detectCardProcessor(request.cardNumber()));
-        } else if ("BOLETO".equals(request.type())) {
+        } else if (request.type() == PaymentType.BOLETO) {
             if (request.dueDate() == null || request.dueDate().isBlank()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Data de vencimento e obrigatoria");
             }
@@ -527,7 +560,7 @@ public class LegacyPaymentService {
                 .map(Payment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        Map<String, Long> byType = payments.stream()
+        Map<PaymentType, Long> byType = payments.stream()
                 .collect(Collectors.groupingBy(Payment::getType, Collectors.counting()));
 
         return new PaymentStatsResponse(payments.size(), totalAmount, byType);
@@ -543,28 +576,28 @@ public class LegacyPaymentService {
         }
     }
 
-    private BigDecimal calculateFee(BigDecimal amount, String type) {
-        if ("CREDIT_CARD".equals(type)) {
+    private BigDecimal calculateFee(BigDecimal amount, PaymentType type) {
+        if (type == PaymentType.CREDIT_CARD) {
             return amount.multiply(new BigDecimal("0.03"));
         }
 
-        if ("BOLETO".equals(type)) {
+        if (type == PaymentType.BOLETO) {
             return new BigDecimal("2.50");
         }
 
-        if ("CRYPTO".equals(type)) {
+        if (type == PaymentType.CRYPTO) {
             return new BigDecimal("1.50");
         }
 
         return BigDecimal.ZERO;
     }
 
-    private String determineStatus(BigDecimal amount, String type) {
+    private String determineStatus(BigDecimal amount, PaymentType type) {
         if (amount.compareTo(new BigDecimal("10000")) > 0) {
             return "PENDING";
         }
 
-        if ("CREDIT_CARD".equals(type) && amount.compareTo(new BigDecimal("5000")) > 0) {
+        if (type == PaymentType.CREDIT_CARD && amount.compareTo(new BigDecimal("5000")) > 0) {
             return "PENDING";
         }
 
@@ -686,18 +719,19 @@ Crie `src/main/java/br/edu/upf/paymentapi/service/ValidatePayment.java`:
 ```java
 package br.edu.upf.paymentapi.service;
 
+import br.edu.upf.paymentapi.model.PaymentType;
 import java.math.BigDecimal;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ValidatePayment {
 
-    public String determineStatus(BigDecimal amount, String type) {
+    public String determineStatus(BigDecimal amount, PaymentType type) {
         if (amount.compareTo(new BigDecimal("10000")) > 0) {
             return "PENDING";
         }
 
-        if ("CREDIT_CARD".equals(type) && amount.compareTo(new BigDecimal("5000")) > 0) {
+        if (type == PaymentType.CREDIT_CARD && amount.compareTo(new BigDecimal("5000")) > 0) {
             return "PENDING";
         }
 
@@ -784,10 +818,11 @@ Crie `src/main/java/br/edu/upf/paymentapi/service/PaymentProcessor.java`:
 package br.edu.upf.paymentapi.service;
 
 import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import br.edu.upf.paymentapi.model.PaymentType;
 
 public interface PaymentProcessor {
 
-    String getType();
+    PaymentType getType();
 
     ProcessedPayment process(CreatePaymentRequest request);
 }
@@ -801,6 +836,7 @@ Crie `src/main/java/br/edu/upf/paymentapi/service/PixPaymentProcessor.java`:
 package br.edu.upf.paymentapi.service;
 
 import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import br.edu.upf.paymentapi.model.PaymentType;
 import java.math.BigDecimal;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -811,8 +847,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class PixPaymentProcessor implements PaymentProcessor {
 
     @Override
-    public String getType() {
-        return "PIX";
+    public PaymentType getType() {
+        return PaymentType.PIX;
     }
 
     @Override
@@ -840,6 +876,7 @@ Crie `src/main/java/br/edu/upf/paymentapi/service/CreditCardPaymentProcessor.jav
 package br.edu.upf.paymentapi.service;
 
 import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import br.edu.upf.paymentapi.model.PaymentType;
 import java.math.BigDecimal;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -852,8 +889,8 @@ public class CreditCardPaymentProcessor implements PaymentProcessor {
     private static final BigDecimal FEE_RATE = new BigDecimal("0.03");
 
     @Override
-    public String getType() {
-        return "CREDIT_CARD";
+    public PaymentType getType() {
+        return PaymentType.CREDIT_CARD;
     }
 
     @Override
@@ -899,6 +936,7 @@ Crie `src/main/java/br/edu/upf/paymentapi/service/BoletoPaymentProcessor.java`:
 package br.edu.upf.paymentapi.service;
 
 import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
+import br.edu.upf.paymentapi.model.PaymentType;
 import java.math.BigDecimal;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -911,8 +949,8 @@ public class BoletoPaymentProcessor implements PaymentProcessor {
     private static final BigDecimal BOLETO_FEE = new BigDecimal("2.50");
 
     @Override
-    public String getType() {
-        return "BOLETO";
+    public PaymentType getType() {
+        return PaymentType.BOLETO;
     }
 
     @Override
@@ -939,6 +977,7 @@ Crie `src/main/java/br/edu/upf/paymentapi/service/PaymentProcessorResolver.java`
 ```java
 package br.edu.upf.paymentapi.service;
 
+import br.edu.upf.paymentapi.model.PaymentType;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -950,14 +989,14 @@ import org.springframework.web.server.ResponseStatusException;
 @Component
 public class PaymentProcessorResolver {
 
-    private final Map<String, PaymentProcessor> processors;
+    private final Map<PaymentType, PaymentProcessor> processors;
 
     public PaymentProcessorResolver(List<PaymentProcessor> processors) {
         this.processors = processors.stream()
                 .collect(Collectors.toMap(PaymentProcessor::getType, Function.identity()));
     }
 
-    public PaymentProcessor resolve(String type) {
+    public PaymentProcessor resolve(PaymentType type) {
         PaymentProcessor processor = processors.get(type);
 
         if (processor == null) {
@@ -982,6 +1021,7 @@ import br.edu.upf.paymentapi.dto.CreatePaymentRequest;
 import br.edu.upf.paymentapi.dto.PaymentStatsResponse;
 import br.edu.upf.paymentapi.mappers.PaymentMapper;
 import br.edu.upf.paymentapi.model.Payment;
+import br.edu.upf.paymentapi.model.PaymentType;
 import br.edu.upf.paymentapi.repository.PaymentRepository;
 import java.math.BigDecimal;
 import java.util.List;
@@ -1037,7 +1077,7 @@ public class PaymentService {
                 .map(Payment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        Map<String, Long> byType = payments.stream()
+        Map<PaymentType, Long> byType = payments.stream()
                 .collect(Collectors.groupingBy(Payment::getType, Collectors.counting()));
 
         return new PaymentStatsResponse(payments.size(), totalAmount, byType);
@@ -1223,7 +1263,8 @@ payment-api/
     │   ├── mappers/
     │   │   └── PaymentMapper.java
     │   ├── model/
-    │   │   └── Payment.java
+    │   │   ├── Payment.java
+    │   │   └── PaymentType.java
     │   ├── repository/
     │   │   └── PaymentRepository.java
     │   └── service/
