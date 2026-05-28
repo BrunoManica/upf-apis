@@ -38,9 +38,9 @@ nav:
   - Aula 3 SOLID:
     - Tutorial Payment API: aula3/tutorial-payment-api.md
     - Princípios SOLID: aula3/solid.md
-  # - Aula 4 API Gateway:
-  #   - API Gateway: aula4/api-gateway.md
-  #   - Tutorial API Gateway: aula4/tutorial-api-gateway.md
+  - Aula 4 API Gateway:
+    - API Gateway: aula4/api-gateway.md
+    - Tutorial API Gateway: aula4/tutorial-api-gateway.md
   # - Aula 5 Message Brokers:
   #   - Message Brokers: aula5/message-brokers.md
   #   - Tutorial Event Pattern: aula5/tutorial-pub-sub-event-pattern.md

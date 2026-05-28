@@ -1,345 +1,437 @@
-# API Gateway — O Portão de Entrada Inteligente das Aplicações
+# API Gateway
 
-## Introdução
+## Objetivo da aula
 
-Em arquiteturas modernas, especialmente com microsserviços, o **API Gateway** se tornou essencial. Ele funciona como um **intermediário inteligente** que centraliza todas as chamadas de API, simplificando a comunicação entre clientes e serviços de backend.
+Vamos entender o que é um API Gateway e por que ele aparece quando uma aplicação deixa de ter apenas uma API e passa a ter vários serviços.
 
-**O problema:** Com múltiplos microsserviços, clientes precisariam:
-- Conhecer o endereço de cada serviço
-- Lidar com autenticação em múltiplos lugares
-- Coordenar respostas de diferentes serviços
+Nesta aula, o foco é simples: entender o papel do gateway antes de escrever o código.
 
-**A solução:** O API Gateway oferece um **único ponto de entrada** que gerencia roteamento, segurança, monitoramento e muito mais.
+A ideia mais importante é esta: o API Gateway fica na entrada do sistema e encaminha as requisições para os serviços corretos.
 
-## O que é um API Gateway?
+## Resultado final
 
-Um **API Gateway** é uma ferramenta que atua como **intermediário entre clientes e serviços de backend**, apresentando um **único ponto de entrada** para chamadas de API.
+Ao final desta aula, você deve conseguir explicar:
 
-### Analogia: Concierge de Hotel
+* por que o cliente chama o gateway em vez de chamar cada microsserviço diretamente;
+* como o gateway decide para qual serviço enviar uma requisição;
+* por que autenticação, rate limiting e cache costumam aparecer nessa camada;
+* o que não deve ser colocado dentro do gateway.
 
-Imagine um **hotel** com vários serviços (restaurante, spa, lavanderia). 
+## Contexto
 
-**Sem Concierge:**
-- Você precisa ligar para cada serviço separadamente
-- Cada um tem seu próprio procedimento
-- É confuso e trabalhoso!
+Em uma aplicação pequena, normalmente temos uma API só.
 
-**Com Concierge:**
-- Você faz **uma única chamada** ao concierge
-- Ele **direciona** sua solicitação ao serviço correto
-- Ele **agrega informações** de múltiplos serviços se necessário
-- Você só precisa conhecer o concierge!
+Algo assim:
 
-O **API Gateway é o concierge** do seu sistema. Os clientes fazem uma única chamada, e o gateway cuida de tudo: roteamento, segurança, agregação e entrega dos resultados.
-
-## Por que Surgiu a Necessidade?
-
-### O Problema: Microsserviços e Complexidade
-
-**Antes (Monólito):**
-```
-Cliente → Aplicação Única → Banco de Dados
-```
-- Simples de gerenciar, mas difícil de escalar
-
-**Depois (Microsserviços):**
-```
-Cliente → ?
-├─ Serviço de Usuários (porta 3001)
-├─ Serviço de Produtos (porta 3002)
-├─ Serviço de Pagamentos (porta 3003)
-└─ ...
-```
-- Múltiplos serviços, múltiplas portas
-- Como o cliente sabe qual porta usar?
-- Como gerenciar segurança em cada um?
-
-**Solução: API Gateway**
-```
-Cliente → API Gateway → [Serviços de Backend]
-         (porta única)    (portas internas)
-```
-- **Um único ponto de entrada** para o cliente
-- **Roteamento inteligente** para os serviços corretos
-- **Segurança centralizada**
-
-## Como Funciona?
-
-### Fluxo Básico
-
-```
-Cliente → API Gateway → Serviço de Backend → Resposta → Cliente
+```text
+Cliente -> API -> Banco de dados
 ```
 
-**Passos:**
-1. Cliente faz requisição ao gateway
-2. Gateway **autentica** e **autoriza** o cliente
-3. Gateway **aplica rate limiting** (verifica limites)
-4. Gateway **roteia** para o serviço correto
-5. Serviço processa e retorna resposta
-6. Gateway **agrega/transforma** resposta (se necessário)
-7. Gateway retorna resposta ao cliente
+O cliente chama a API, a API processa a requisição e devolve a resposta. Para começar, isso é simples e funciona bem.
 
-### Composição de APIs
+O problema aparece quando o sistema cresce e começa a ser dividido em serviços menores:
 
-O gateway pode **combinar respostas de múltiplos serviços** em uma única resposta:
-
-**Sem Gateway:**
-```
-Cliente faz 3 requisições:
-1. GET /pedidos/123
-2. GET /produtos?id=1,2,3
-3. GET /usuarios/789
-
-3 requisições = 3 latências = lento
+```text
+Cliente -> Serviço de Usuários
+Cliente -> Serviço de Produtos
+Cliente -> Serviço de Pagamentos
+Cliente -> Serviço de Pedidos
 ```
 
-**Com Gateway:**
-```
-Cliente faz 1 requisição:
-GET /api/pedidos/123
+Agora o cliente precisa saber o endereço de cada serviço.
 
-Gateway faz internamente:
-1. Busca pedido, produtos e usuário
-2. Agrega tudo em uma resposta
+Isso cria alguns problemas:
 
-1 requisição = rápido e simples
-```
+* O cliente precisa conhecer várias portas e vários endereços.
+* Cada serviço pode ter uma regra de segurança diferente.
+* Fica mais difícil mudar um serviço sem afetar quem consome a API.
+* A aplicação cliente começa a saber detalhes internos demais do backend.
 
-## Principais Funcionalidades
+O API Gateway aparece para resolver esse tipo de problema.
 
-### 1. Roteamento de Solicitações
+Ele vira a porta de entrada da aplicação.
 
-Direciona requisições para os serviços de backend corretos:
+## Explicação conceitual
 
-```
-GET /api/usuarios/*     → Serviço de Usuários
-GET /api/produtos/*     → Serviço de Produtos
-POST /api/pagamentos/*  → Serviço de Pagamentos
-```
+Um API Gateway é uma aplicação que fica entre o cliente e os serviços internos.
 
-### 2. Autenticação e Autorização
+Ele recebe uma requisição, olha para informações como caminho, método HTTP, headers ou domínio, e decide para qual serviço essa requisição deve ir.
 
-Centraliza a segurança:
-- **API Keys**: chave simples para identificar cliente
-- **OAuth 2.0**: padrão usado por grandes plataformas
-- **JWT**: tokens compactos que representam usuário
+Um exemplo simples:
 
-**Vantagem:** Os serviços de backend não precisam implementar autenticação. Eles confiam no gateway!
-
-### 3. Rate Limiting
-
-Controla quantas requisições um cliente pode fazer:
-
-```
-Cliente A (Básico): 100 requisições/hora
-Cliente B (Premium): 10.000 requisições/hora
+```text
+GET /api/users    -> Serviço de Usuários
+GET /api/products -> Serviço de Produtos
+POST /api/orders  -> Serviço de Pedidos
 ```
 
-**Proteções:**
-- Previne abusos
-- Protege contra DDoS
-- Garante uso justo
+O gateway não precisa conter a regra de negócio de usuários, produtos ou pedidos.
 
-### 4. Cache
+Essa parte é importante.
 
-Armazena respostas para acelerar requisições futuras:
+O gateway não deve virar um lugar onde toda a lógica da aplicação fica misturada. Ele existe principalmente para receber, filtrar, rotear e controlar as chamadas.
 
-```
-Requisição 1: Cliente → Gateway → Serviço → Cache
-Requisição 2: Cliente → Gateway → Cache (muito mais rápido!)
-```
+Os serviços continuam responsáveis pelas regras de negócio.
 
-### 5. Monitoramento e Logging
+### Sem API Gateway
 
-Coleta dados sobre todas as requisições:
-- **Métricas**: latência, throughput, taxa de erro
-- **Logs**: histórico completo de uso
-- **Dashboards**: visualização em tempo real
+Sem gateway, o cliente precisa chamar cada serviço diretamente:
 
-### 6. Balanceamento de Carga
-
-Distribui requisições entre múltiplas instâncias:
-
-```
-API Gateway
-    ├─ Serviço (instância 1) - 50% do tráfego
-    ├─ Serviço (instância 2) - 50% do tráfego
-    └─ Serviço (instância 3) - reserva
+```text
+GET http://localhost:8081/users
+GET http://localhost:8082/products
+GET http://localhost:8083/orders
 ```
 
-## Benefícios
+Isso até funciona em um exemplo pequeno, mas começa a ficar ruim quando o número de serviços aumenta.
 
-1. **Simplificação**: Cliente só conhece o gateway, não os serviços internos
-2. **Segurança Centralizada**: Implementada uma vez, aplicada em todos os serviços
-3. **Escalabilidade**: Facilita balanceamento de carga e distribuição de tráfego
-4. **Observabilidade**: Visibilidade completa do sistema (métricas e logs centralizados)
-5. **Flexibilidade**: Facilita migração de serviços sem afetar clientes
+Imagine também que amanhã o serviço de usuários mude de porta ou vá para outro servidor. O cliente teria que mudar junto.
 
-## Desafios e Considerações
+### Com API Gateway
 
-### 1. Ponto Único de Falha
+Com gateway, o cliente chama apenas um endereço:
 
-**Problema:** Se o gateway cair, todo o sistema fica inacessível.
-
-**Mitigação:**
-- Múltiplas instâncias do gateway
-- Load balancer na frente
-- Health checks para detectar problemas
-
-### 2. Escalabilidade
-
-**Problema:** Pode se tornar gargalo se não escalado corretamente.
-
-**Mitigação:**
-- Escalar horizontalmente (adicionar instâncias)
-- Cache agressivo
-- Monitoramento para identificar gargalos
-
-### 3. Complexidade Operacional
-
-**Problema:** O gateway também precisa ser monitorado e gerenciado.
-
-**Mitigação:**
-- Automação e ferramentas de gerenciamento
-- Equipe treinada
-- Documentação atualizada
-
-## Exemplo Prático: E-commerce
-
-**Cenário:** Cliente precisa visualizar informações de um pedido.
-
-**Sem Gateway:**
-```javascript
-// Cliente precisa fazer 4 requisições
-const pedido = await fetch('http://pedidos:3001/pedidos/123');
-const produtos = await fetch('http://produtos:3002/produtos?id=1,2,3');
-const usuario = await fetch('http://usuarios:3003/usuarios/789');
-const pagamento = await fetch('http://pagamentos:3004/pagamentos/pedido-123');
-
-// Agregar tudo manualmente
-const resultado = {
-  pedido: pedido.data,
-  produtos: produtos.data,
-  usuario: usuario.data,
-  pagamento: pagamento.data
-};
+```text
+GET http://localhost:8080/api/users
+GET http://localhost:8080/api/products
+GET http://localhost:8080/api/orders
 ```
 
-**Problemas:**
-- Cliente precisa conhecer 4 endereços diferentes
-- 4 requisições = 4 latências = experiência lenta
+O gateway recebe a chamada e encaminha internamente:
 
-**Com Gateway:**
-```javascript
-// Cliente faz uma única requisição
-const resposta = await fetch('http://gateway/api/pedidos/123');
-
-// Gateway faz internamente:
-// 1. Busca pedido, produtos, usuário e pagamento
-// 2. Agrega tudo em uma resposta única
-
-const resultado = resposta.data; // Tudo pronto!
+```text
+/api/users    -> http://localhost:8081/users
+/api/products -> http://localhost:8082/products
+/api/orders   -> http://localhost:8083/orders
 ```
 
-**Vantagens:**
-- Cliente conhece apenas o gateway
-- 1 requisição = experiência rápida
-- Gateway centraliza mudanças
+Para o cliente, existe uma entrada só.
 
-## Ferramentas Populares
+Para o backend, continuam existindo serviços separados.
 
-### Kong
-- **Open source** e gratuito (versão Community)
-- Altamente extensível com plugins
-- Ideal para controle total
+## Setup inicial
 
-### AWS API Gateway
-- **Gerenciado** pela AWS (serverless)
-- Escalável automaticamente
-- Pay-per-use
+Antes de pensar em ferramenta, framework ou linguagem, pense nos componentes:
 
-### NGINX
-- **Web server** e reverse proxy
-- Muito performático
-- Open source
-
-### Apache APISIX
-- **Open source** e gratuito
-- Cloud-native (Kubernetes)
-- Alta performance
-
-## Quando Usar ou Não Usar
-
-### ✅ Use quando:
-
-- **Microsserviços**: múltiplos serviços precisam ser gerenciados
-- **Segurança centralizada**: quer unificar autenticação/autorização
-- **Múltiplos clientes**: web, mobile, terceiros
-- **Agregação de dados**: precisa combinar respostas de múltiplos serviços
-- **Rate limiting**: precisa controlar uso por cliente
-
-### ❌ Evite quando:
-
-- **Aplicação simples**: sistema pequeno com poucos endpoints
-- **Monólito**: gateway pode ser overkill
-- **Equipe pequena**: falta recursos para gerenciar
-- **Serviço único**: pode ser desnecessário
-
-### Gateway Gerenciado vs Self-Hosted
-
-| Critério | Gerenciado (AWS) | Self-Hosted (Kong) |
-|----------|------------------|-------------------|
-| **Setup** | Rápido | Requer configuração |
-| **Custo** | Pay-per-use | Infraestrutura própria |
-| **Flexibilidade** | Limitada | Total controle |
-| **Ideal para** | Começar rápido | Controle total |
-
-## Arquitetura Básica
-
-```
-┌─────────────────────────────────┐
-│         Clientes                │
-│  (Web, Mobile, Terceiros)       │
-└──────────────┬───────────────────┘
-               │
-               │ HTTPS
-               ▼
-┌─────────────────────────────────┐
-│         API Gateway             │
-│  - Autenticação                 │
-│  - Rate Limiting                 │
-│  - Roteamento                    │
-│  - Cache                         │
-└──────┬───────────────────────────┘
-       │
-       ├─────────┬─────────┬─────────┐
-       ▼         ▼         ▼         ▼
-   ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐
-   │Serviço│ │Serviço│ │Serviço│ │Serviço│
-   │   1   │ │   2   │ │   3   │ │   4   │
-   └───────┘ └───────┘ └───────┘ └───────┘
+```text
+gateway-demo/
+├── Serviço de Usuários
+├── Serviço de Produtos
+└── API Gateway
 ```
 
-## Conclusão
+Cada parte tem uma responsabilidade:
 
-O **API Gateway** é um componente essencial em arquiteturas modernas, especialmente com microsserviços. Ele atua como um **ponto central de controle**, facilitando a comunicação entre clientes e serviços de backend.
+* Serviço de Usuários: responde dados e regras de usuários.
+* Serviço de Produtos: responde dados e regras de produtos.
+* API Gateway: recebe as chamadas externas e encaminha para os serviços.
 
-### Principais Takeaways:
+Nesta aula conceitual, vamos começar pelo roteamento e depois olhar para três recursos que aparecem muito quando falamos de gateway: autenticação, rate limiting e cache.
 
-1. **Simplificação**: Um único ponto de entrada
-2. **Segurança**: Centralização facilita implementação
-3. **Escalabilidade**: Facilita crescimento e distribuição de carga
-4. **Observabilidade**: Visibilidade completa do sistema
-5. **Flexibilidade**: Facilita mudanças sem afetar clientes
+Esses recursos têm relação direta com a ideia de porta de entrada.
 
-### Princípio Central:
+Se toda chamada externa passa pelo gateway, faz sentido usar esse ponto para aplicar algumas regras antes de deixar a requisição chegar nos serviços internos.
 
-> **"O API Gateway é como o concierge de um hotel: você só precisa se comunicar com ele, e ele cuida de direcionar, agregar e entregar tudo que você precisa, de forma organizada e eficiente."**
+## Passo a passo
 
----
+### 1. Entender quem faz o quê
 
-## Referências
+Pense em três aplicações separadas:
 
-- [IBM - O que é um API Gateway?](https://www.ibm.com/br-pt/think/topics/api-gateway)
-- [Kong - What is an API Gateway? Core Fundamentals and Use Cases](https://konghq.com/blog/learning-center/what-is-an-api-gateway)
+```text
+API Gateway       -> porta de entrada
+Serviço Usuários  -> regra de usuários
+Serviço Produtos  -> regra de produtos
+```
+
+Essa separação é o primeiro passo para pensar em microsserviços.
+
+O gateway não substitui os serviços.
+
+Ele apenas organiza a entrada para chegar neles.
+
+### 2. Entender o roteamento
+
+Roteamento é a decisão de encaminhar uma requisição para o destino certo.
+
+Uma rota pode ser lida assim:
+
+```text
+Quando chegar uma requisição em /api/users/**
+encaminhe para o Serviço de Usuários
+```
+
+Outra rota:
+
+```text
+Quando chegar uma requisição em /api/products/**
+encaminhe para o Serviço de Produtos
+```
+
+O gateway usa alguma condição para decidir a rota.
+
+A condição mais comum é o caminho da URL:
+
+```text
+/api/users
+/api/products
+/api/orders
+```
+
+Mas em sistemas reais a decisão também pode considerar:
+
+* Método HTTP, como `GET`, `POST`, `PUT` ou `DELETE`.
+* Headers da requisição.
+* Domínio usado pelo cliente.
+* Versão da API.
+* Tipo de cliente, como web, mobile ou parceiro externo.
+
+Para começar, o caminho da URL já é suficiente.
+
+### 3. Entender filtros
+
+Além de rotear, o gateway pode aplicar filtros.
+
+Filtro é uma etapa que acontece antes ou depois de encaminhar a requisição.
+
+Um exemplo simples é remover um prefixo da URL.
+
+O cliente chama:
+
+```text
+GET /api/users
+```
+
+Mas o serviço interno espera:
+
+```text
+GET /users
+```
+
+Então o gateway pode transformar o caminho:
+
+```text
+/api/users      -> /users
+/api/users/123  -> /users/123
+```
+
+Esse tipo de transformação ajuda a manter uma URL organizada para o cliente sem obrigar todos os serviços internos a usarem exatamente o mesmo prefixo.
+
+Outros filtros comuns são:
+
+* Adicionar ou remover headers.
+* Registrar logs.
+* Validar autenticação.
+* Bloquear chamadas acima de um limite.
+* Redirecionar chamadas para uma nova versão da API.
+
+Nem tudo precisa ser usado na primeira aula.
+
+Primeiro, o mais importante é entender o caminho da requisição.
+
+### 4. Entender autenticação no gateway
+
+Autenticação é o processo de descobrir quem está fazendo a requisição.
+
+Em APIs modernas, isso normalmente aparece com um token enviado no header:
+
+```text
+Authorization: Bearer token-aqui
+```
+
+O gateway pode verificar esse token antes de encaminhar a requisição para um serviço interno.
+
+Na prática, isso evita repetir a mesma verificação básica em todos os serviços.
+
+Um exemplo:
+
+```text
+GET /api/users
+Authorization: Bearer token-valido
+
+Gateway valida o token.
+Gateway encaminha para users-service.
+```
+
+Se o token estiver ausente ou inválido:
+
+```text
+Gateway responde 401 Unauthorized.
+users-service nem recebe a requisição.
+```
+
+Isso melhora a segurança porque o sistema barra chamadas inválidas logo na entrada.
+
+Mesmo assim, isso não significa que os serviços internos podem ser descuidados.
+
+Em produção, é comum combinar duas proteções:
+
+* o gateway valida a chamada externa;
+* os serviços internos continuam protegidos contra acesso direto indevido.
+
+Use autenticação no gateway quando você precisa centralizar a entrada de usuários, aplicativos mobile, frontends web ou sistemas parceiros.
+
+### 5. Entender rate limiting
+
+Rate limiting significa limitar a quantidade de requisições que um cliente pode fazer em um intervalo de tempo.
+
+Por exemplo:
+
+```text
+Cliente comum: 60 requisições por minuto
+Cliente parceiro: 600 requisições por minuto
+```
+
+Isso existe porque uma API não aguenta tráfego infinito.
+
+Sem limite, um cliente com bug, um script mal configurado ou uma tentativa de ataque pode mandar milhares de chamadas e prejudicar todo o sistema.
+
+Com rate limiting, o gateway consegue responder antes de sobrecarregar os serviços:
+
+```text
+Requisições dentro do limite -> seguem para o serviço
+Requisições acima do limite  -> recebem 429 Too Many Requests
+```
+
+O status `429 Too Many Requests` quer dizer: a requisição até pode estar correta, mas passou do limite permitido naquele momento.
+
+Use rate limiting no gateway quando você precisa proteger os serviços internos, controlar consumo por cliente ou evitar abuso em endpoints públicos.
+
+### 6. Entender cache no gateway
+
+Cache é guardar uma resposta por um tempo para evitar buscar a mesma informação toda hora no serviço interno.
+
+Imagine uma rota de produtos:
+
+```text
+GET /api/products
+```
+
+Se várias pessoas chamam essa rota em poucos segundos e os produtos quase não mudam, o gateway pode guardar a resposta por um curto período.
+
+O primeiro cliente faz a chamada:
+
+```text
+Cliente -> Gateway -> products-service
+```
+
+Depois, enquanto o cache ainda vale:
+
+```text
+Cliente -> Gateway -> resposta em cache
+```
+
+Isso reduz latência e diminui carga nos serviços internos.
+
+Mas cache precisa de cuidado.
+
+Não faz sentido cachear qualquer coisa.
+
+Bons candidatos:
+
+* listas públicas de produtos;
+* categorias;
+* configurações públicas;
+* dados que mudam pouco.
+
+Evite cachear sem pensar:
+
+* dados de usuário autenticado;
+* carrinho de compras;
+* saldo, pagamento ou informação sensível;
+* respostas que mudam a cada requisição.
+
+Use cache no gateway quando a resposta é pública ou pouco variável e quando devolver uma versão levemente antiga por alguns segundos não prejudica o sistema.
+
+### 7. Entender o que o gateway não deve fazer
+
+O gateway não deve ser o lugar principal da regra de negócio.
+
+Ele não deve decidir:
+
+* Como cadastrar um usuário.
+* Como calcular o preço de um produto.
+* Como aprovar um pagamento.
+* Como atualizar o estoque.
+
+Essas regras pertencem aos serviços.
+
+O gateway cuida da entrada.
+
+Os serviços cuidam do negócio.
+
+Essa divisão evita que o gateway vire uma aplicação enorme e difícil de manter.
+
+## Código completo
+
+O código completo da aula prática está no tutorial:
+
+[Tutorial prático de API Gateway](tutorial-api-gateway.md)
+
+## Erros comuns
+
+### Tentar colocar regra de negócio no gateway
+
+O gateway não deve decidir regra de cadastro, cálculo, estoque ou pagamento.
+
+Essas regras pertencem aos serviços.
+
+O gateway deve cuidar da entrada, do roteamento e de controles transversais, como autenticação, logs e limites de requisição.
+
+### Confundir gateway com microsserviço de negócio
+
+O gateway também é uma aplicação, mas a função dele é diferente.
+
+Ele não é o serviço de usuários.
+
+Ele não é o serviço de produtos.
+
+Ele é a entrada para chegar nesses serviços.
+
+### Começar com recursos demais
+
+É comum tentar colocar autenticação, banco, cache, observabilidade e limite de requisição no primeiro exemplo.
+
+Esses recursos são importantes, mas precisam entrar depois que o roteamento estiver claro.
+
+Primeiro o aluno precisa enxergar a requisição saindo do cliente, passando pelo gateway e chegando no serviço certo.
+
+Depois disso, os outros recursos fazem mais sentido.
+
+### Usar cache em resposta sensível
+
+Cache no gateway pode melhorar desempenho, mas também pode causar problema sério se for usado no lugar errado.
+
+Não faça cache de dados privados de usuário, tokens, saldo, pagamentos ou qualquer resposta que dependa da identidade de quem chamou.
+
+### Achar que rate limiting substitui segurança
+
+Rate limiting limita volume de chamadas.
+
+Ele não prova identidade, não autoriza acesso e não valida regra de negócio.
+
+Para isso, você ainda precisa de autenticação, autorização e validações dentro dos serviços.
+
+## Resumo
+
+O API Gateway é a porta de entrada de uma arquitetura com vários serviços.
+
+Ele ajuda o cliente a chamar apenas um endereço, enquanto o backend continua dividido em serviços menores.
+
+Além de rotear, ele pode aplicar controles transversais:
+
+* autenticação, para barrar chamadas sem identidade válida;
+* rate limiting, para controlar excesso de requisições;
+* cache, para acelerar respostas que podem ser reaproveitadas com segurança.
+
+Nesta aula, o ponto mais importante é este:
+
+```text
+O cliente chama o gateway.
+O gateway encaminha para o serviço certo.
+O serviço continua com a regra de negócio.
+```
+
+Depois que esse conceito estiver claro, a aula prática pode escolher uma ferramenta específica para implementar esse comportamento.
+
+
