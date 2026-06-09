@@ -41,10 +41,9 @@ nav:
   - Aula 4 API Gateway:
     - API Gateway: aula4/api-gateway.md
     - Tutorial API Gateway: aula4/tutorial-api-gateway.md
-  # - Aula 5 Message Brokers:
-  #   - Message Brokers: aula5/message-brokers.md
-  #   - Tutorial Event Pattern: aula5/tutorial-pub-sub-event-pattern.md
-  #   - Tutorial RPC Pattern: aula5/tutorial-pub-sub-rpc.md
+  - Aula 5 Message Brokers:
+    - Message Brokers: aula5/message-brokers.md
+    - Tutorial Mensageria: aula5/tutorial-pub-sub.md
   # - Aula 6 Observabilidade:
   #   - Observabilidade e Monitoramento: aula6/observability.md
   #   - Tutorial Observabilidade: aula6/tutorial-observability.md
