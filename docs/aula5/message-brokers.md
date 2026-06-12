@@ -93,7 +93,7 @@ Pedidos API -> Message Broker
 
 Ela cria o pedido, salva no banco e publica um evento dizendo que o pedido foi criado.
 
-O producer não deve conhecer a regra interna dos outros serviços. Ele não deve pensar assim:
+O producer não deve conhecer a regra interna dos outros serviços. O producer não deve embutir intenção de ação para outros serviços. Ou seja, a mensagem não deve conter comandos como:
 
 ```text
 envie um e-mail
@@ -155,7 +155,7 @@ Ela ajuda quando existe um trabalho que precisa ser feito, mas não precisa ser 
 Exemplo:
 
 ```text
-pedido.criado -> fila de notificações -> notifications-service
+pedido.criado -> fila de notificações -> serviço de notificações
 ```
 
 Se o serviço de notificações estiver desligado, a mensagem pode ficar aguardando. Quando o serviço voltar, ele continua consumindo.
@@ -464,73 +464,54 @@ Se você precisa manter um fluxo contínuo de eventos e permitir que vários sis
 
 Em projetos reais, a escolha depende de volume, necessidade de replay, modelo de entrega, operação, equipe, infraestrutura e simplicidade.
 
-## Setup inicial
+## Quando usar mensageria
 
-Esta aula é conceitual, então você não precisa instalar nada agora.
+### HTTP direto começa a atrapalhar
 
-Na prática seguinte, vamos usar RabbitMQ com Spring AMQP porque ele deixa bem visível a ideia de producer, exchange, queue, routing key e consumer.
+HTTP continua sendo ótimo para consultas e comandos que precisam de resposta imediata.
 
-Mesmo assim, leve a ideia principal para qualquer ferramenta:
+O problema aparece quando uma ação principal começa a depender de várias ações secundárias.
 
-```text
-aplicação publica mensagem -> broker armazena/roteia -> outra aplicação consome
-```
+Em uma compra, por exemplo, criar o pedido é a ação principal. Enviar e-mail, alimentar relatório, avisar outro sistema e iniciar uma rotina interna podem acontecer depois.
 
-Quando o projeto usa Kafka, a prática muda para Spring for Apache Kafka, tópicos, partitions, consumer groups e offsets.
+Quando tudo isso vira chamada HTTP direta, a API passa a conhecer serviços demais. Ela também passa a sofrer com a lentidão ou a falha de cada integração.
 
-Quando o projeto usa RabbitMQ, a prática muda para Spring AMQP, exchanges, queues, bindings e routing keys.
+Esse é o primeiro sinal de que mensageria pode ajudar: existe um fato importante no negócio, e outros sistemas precisam reagir a esse fato sem bloquear a resposta principal.
 
-## Passo a passo
+### O fato precisa virar evento
 
-### 1. Entender o problema do HTTP direto
+Em vez de pensar em uma ordem direta, pense no fato que aconteceu.
 
-Imagine este código dentro de um service de pedidos:
+Não é:
 
 ```text
-criar pedido
-salvar pedido
-chamar serviço de e-mail
-chamar serviço de estoque
-chamar serviço de faturamento
-responder cliente
+envie email do pedido
 ```
 
-Esse desenho parece simples, mas cria acoplamento.
-
-A API de pedidos passa a depender de vários serviços para responder uma única requisição.
-
-Se a notificação falhar, o pedido talvez nem seja criado. Se o faturamento demorar, o cliente espera mais. Se o estoque mudar o endpoint, a API de pedidos precisa mudar junto.
-
-HTTP continua sendo ótimo para consulta direta e resposta imediata. O problema aparece quando transformamos toda comunicação entre serviços em chamada síncrona.
-
-### 2. Trocar chamada direta por evento
-
-Com mensageria, a API de pedidos faz o trabalho principal:
+É:
 
 ```text
-criar pedido
-salvar pedido
-publicar pedido.criado
-responder cliente
+pedido.criado
 ```
 
-Depois disso, outros serviços reagem:
+Essa diferença muda o desenho. O producer publica o fato. Os consumers decidem o que fazer com ele.
 
 ```text
-notificações consome pedido.criado
-faturamento consome pedido.criado
-analytics consome pedido.criado
+pedido.criado
+{
+  "pedidoId": "123",
+  "clienteId": "456",
+  "valorTotal": 299.90
+}
 ```
 
-O pedido não precisa conhecer esses serviços diretamente.
+Com isso, fica mais fácil adicionar um novo serviço interessado no evento sem alterar a aplicação que publicou a mensagem.
 
-Isso é desacoplamento na prática: um serviço publica algo que aconteceu, e outros serviços decidem como reagir.
-
-### 3. Entender entrega assíncrona
+### O trabalho pode ser assíncrono
 
 Assíncrono significa que uma parte do trabalho fica para depois.
 
-Quando a API publica o evento, ela não espera todos os consumers terminarem.
+Quando uma aplicação publica um evento, ela não espera todos os consumers terminarem.
 
 Isso melhora o tempo de resposta da API, mas traz um cuidado: o sistema passa a trabalhar com consistência eventual.
 
@@ -542,7 +523,7 @@ Isso não é necessariamente um problema. Em muitos sistemas, é exatamente o co
 
 O cliente precisa saber que o pedido foi criado. O e-mail pode chegar logo depois.
 
-### 4. Escolher entre fila e tópico
+### Fila, tópico e broadcast resolvem problemas diferentes
 
 Agora pense no tipo de trabalho.
 
@@ -554,6 +535,7 @@ gerar nota fiscal -> fila fiscal -> um worker processa
 
 Se você tem um evento que vários sistemas precisam conhecer, um tópico costuma fazer mais sentido:
 
+Kafka
 ```text
 pedido.criado -> tópico pedidos -> vários consumidores interessados
 ```
@@ -564,7 +546,7 @@ Kafka também consegue distribuir processamento entre instâncias usando consume
 
 Por isso, não escolha a ferramenta só pelo nome do padrão. Olhe para o comportamento que você precisa.
 
-### 5. Pensar em idempotência
+### Idempotência evita efeito duplicado
 
 Em sistemas com mensageria, uma mensagem pode ser entregue mais de uma vez.
 
@@ -586,9 +568,9 @@ Outro exemplo:
 Se a nota fiscal do pedido 123 já existe, não gere outra nota.
 ```
 
-Na primeira prática, vamos apenas registrar o evento no log para entender a mecânica. Depois, quando o assunto amadurecer, esse cuidado entra no desenho da solução.
+Em uma primeira prática, é comum só registrar o evento no log para entender a mecânica. Em produção, esse cuidado precisa entrar no desenho da solução.
 
-### 6. Entender retry e dead letter
+### Retry e dead letter ajudam a tratar falhas
 
 Retry é tentar processar a mensagem novamente depois de uma falha.
 
@@ -600,19 +582,43 @@ banco demorou para responder
 timeout em uma integração
 ```
 
-Mas retry infinito é perigoso. Se a mensagem tem dados inválidos, tentar para sempre só ocupa recurso e trava o processamento.
+O ponto crítico é este: retry infinito é perigoso. Muito perigoso.
+
+Quando a mensagem está inválida, ela nunca vai funcionar — e insistir nisso:
+
+consome recurso sem gerar resultado
+congestiona fila/tópico
+atrasa mensagens válidas
+pode derrubar o throughput do sistema
+
+Por isso, retry precisa de limite e, ao estourar, a mensagem deve ir para Dead Letter Queue (DLQ).
 
 Por isso existe a ideia de dead letter.
 
-Dead letter é um destino para mensagens que não conseguiram ser processadas depois de algumas tentativas.
+Dead letter é um destino para mensagens que falharam após o limite de tentativas.
+pedido.criado -> consumer faturamento
 
-Em RabbitMQ, é comum usar uma dead letter queue.
+A mensagem chega, mas o campo cpf vem inválido.
+O consumer tenta 3 vezes (retry) e falha nas 3.
 
-Em Kafka, é comum usar um tópico separado para mensagens com erro, muitas vezes chamado de dead letter topic.
+Em vez de tentar para sempre, a mensagem vai para a dead letter:
+topico.pedidos -> falha 3x -> topico.pedidos.dlq
 
-O nome muda, mas a ideia é parecida: separar mensagens problemáticas para análise, correção ou reprocessamento controlado.
+o RabbitMQ, normalmente você envia falhas para uma Dead Letter Queue (DLQ).
+No Kafka, normalmente você envia falhas para um Dead Letter Topic (DLT).
 
-### 7. Entender que mensageria não substitui API REST
+Muda o nome. Não muda o princípio.
+
+A lógica é sempre a mesma:
+tirar mensagens com erro do fluxo principal para não contaminar o processamento normal.
+
+Com isso, você ganha três coisas:
+
+continuidade do processamento saudável
+rastreabilidade das mensagens problemáticas
+correção e reprocessamento com controle, sem urgência caótica
+
+### Mensageria não substitui API REST
 
 Mensageria complementa HTTP.
 
@@ -638,51 +644,3 @@ Um sistema real normalmente usa os dois.
 API REST cuida bem de comandos e consultas diretas.
 
 Mensageria cuida bem de eventos, integração assíncrona e processamento desacoplado.
-
-## Código completo
-
-Nesta aula conceitual ainda não há código Java completo.
-
-O código completo entra no próximo arquivo da aula 5:
-
-* `Tutorial Mensageria`: cria um producer e um consumer usando RabbitMQ, Spring Boot e Spring AMQP.
-
-Esse tutorial usa RabbitMQ porque é uma boa ferramenta para enxergar filas, exchanges, bindings e consumers logo no começo.
-
-Uma versão com Kafka usaria outros componentes:
-
-* `spring-kafka` no lugar de `spring-boot-starter-amqp`;
-* tópicos no lugar de exchanges e filas;
-* consumer groups no lugar de consumers ligados a uma fila;
-* offsets no lugar da confirmação tradicional de fila.
-
-O conceito principal continua o mesmo: publicar eventos e permitir que outros serviços reajam sem acoplamento direto.
-
-## Erros comuns
-
-* Achar que message broker é sinônimo de RabbitMQ. RabbitMQ é uma ferramenta. Kafka, ActiveMQ, SQS e Google Pub/Sub também aparecem nesse tipo de conversa.
-* Achar que Kafka e RabbitMQ são iguais. Eles resolvem problemas próximos, mas usam modelos diferentes.
-* Chamar tudo de fila. Em Kafka, o termo central é tópico. Em RabbitMQ, filas são centrais, mas exchanges e bindings também fazem parte do desenho.
-* Usar evento como comando direto. `pedido.criado` é melhor do que `enviar.email`, porque o producer não deve mandar no trabalho interno do consumer.
-* Achar que mensageria substitui HTTP. Ela complementa. Consultas e respostas imediatas continuam fazendo sentido com REST.
-* Ignorar duplicidade. Consumers precisam ser preparados para receber a mesma mensagem mais de uma vez em cenários reais.
-* Ignorar observabilidade. Mensageria sem logs, métricas e rastreio de mensagens fica difícil de diagnosticar.
-* Colocar regra de negócio no controller. Mesmo com mensageria, controller recebe HTTP e delega para service.
-
-## Resumo
-
-Message broker é um intermediário para comunicação por mensagens.
-
-Mensageria ajuda microsserviços a ficarem menos acoplados.
-
-Producer publica mensagens. Consumer recebe e processa.
-
-Eventos descrevem algo que aconteceu, como `pedido.criado`.
-
-RabbitMQ costuma encaixar bem em filas, roteamento e tarefas assíncronas.
-
-Kafka costuma encaixar bem em streaming de eventos, alto volume, histórico e replay.
-
-Use mensageria quando um serviço precisa avisar que algo aconteceu e outros serviços podem reagir depois.
-
-Use HTTP quando a resposta precisa ser imediata e direta.

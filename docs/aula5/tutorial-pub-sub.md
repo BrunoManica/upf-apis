@@ -69,185 +69,22 @@ Essa segunda parte existe para comparação. Ela não deve ser o primeiro padrã
 
 ## Contexto
 
-Até agora, quando uma aplicação precisava conversar com outra, usamos HTTP.
+Na aula de message brokers, já vimos a parte conceitual: producer, consumer, fila, exchange, routing key, binding, evento, pub/sub e RPC.
 
-Isso funciona bem quando existe uma pergunta direta:
+Agora a conversa muda para implementação.
 
-```text
-Me devolva este usuário.
-Crie este produto.
-Atualize este cadastro.
-```
+Vamos pegar aquela ideia e transformar em serviços Spring Boot rodando de verdade:
 
-Mas nem toda comunicação entre microsserviços precisa acontecer na mesma hora.
+* uma API de pedidos grava no MongoDB;
+* a API publica o evento `pedido.criado` no RabbitMQ;
+* outro serviço consome esse evento;
+* no fim, comparamos com um exemplo pequeno de RPC usando RabbitMQ.
 
-Imagine uma compra em uma loja virtual. Quando o pedido é criado, várias coisas podem acontecer depois:
-
-* enviar e-mail para o cliente;
-* avisar o financeiro;
-* registrar uma métrica;
-* notificar outro sistema;
-* atualizar algum relatório.
-
-Se a API de pedidos chamar todos esses serviços diretamente por HTTP, o cliente fica esperando cada chamada terminar.
-
-Pior: se o serviço de notificação estiver fora do ar, a criação do pedido pode falhar mesmo quando o pedido em si está correto.
-
-Com mensageria, a API de pedidos faz o trabalho principal:
-
-```text
-criar pedido
-salvar pedido
-publicar pedido.criado
-responder cliente
-```
-
-Depois disso, outros serviços reagem ao evento no tempo deles.
+Use esta aula como prática guiada. Quando aparecer um termo de mensageria, ele será explicado só o suficiente para entender o arquivo que estamos criando.
 
 ## Explicação conceitual
 
-### Mensagem
-
-Mensagem é um pacote de dados enviado de uma aplicação para outra.
-
-No nosso exemplo, a mensagem vai representar um pedido criado:
-
-```json
-{
-  "orderId": "665f...",
-  "customerName": "Ana Souza",
-  "customerEmail": "ana@email.com",
-  "total": 149.90,
-  "createdAt": "2026-06-09T10:00:00Z"
-}
-```
-
-Essa mensagem não é uma chamada HTTP. Ela passa pelo RabbitMQ.
-
-### Message broker
-
-RabbitMQ é um message broker.
-
-Broker é o intermediário. Ele recebe mensagens, organiza o destino e entrega para quem estiver interessado.
-
-Pense nele como uma central de distribuição:
-
-```text
-orders-service
-   |
-   v
-RabbitMQ
-   |
-   +--> notifications-service
-```
-
-O `orders-service` não precisa conhecer o endereço HTTP do `notifications-service`.
-
-Ele só publica a mensagem.
-
-### Producer
-
-Producer é quem envia a mensagem.
-
-Na prática, no Spring Boot, o producer usa `RabbitTemplate`.
-
-No nosso exemplo:
-
-```text
-orders-service publica pedido.criado
-```
-
-### Consumer
-
-Consumer é quem recebe e processa a mensagem.
-
-No Spring Boot, o consumer costuma usar `@RabbitListener`.
-
-No nosso exemplo:
-
-```text
-notifications-service escuta pedido.criado
-```
-
-### Evento
-
-Evento é uma mensagem dizendo que algo já aconteceu.
-
-Um bom nome de evento costuma ficar no passado:
-
-```text
-pedido.criado
-pedido.cancelado
-pagamento.aprovado
-usuario.cadastrado
-```
-
-Isso muda a forma de pensar.
-
-O producer não manda o consumer executar uma tarefa específica.
-
-Ele só informa um fato:
-
-```text
-Um pedido foi criado.
-```
-
-Depois disso, cada consumer decide o que fazer.
-
-O serviço de notificações pode enviar e-mail. O serviço financeiro pode iniciar faturamento. O serviço de métricas pode contar uma venda.
-
-O serviço de pedidos não precisa conhecer esses detalhes.
-
-### Queue
-
-Queue é a fila.
-
-Ela guarda mensagens até que um consumer consiga processar.
-
-Se o `notifications-service` estiver desligado, a mensagem pode ficar na fila. Quando o serviço voltar, ele continua consumindo.
-
-Isso é diferente de uma chamada HTTP direta. No HTTP, se o serviço estiver fora do ar, a chamada falha na hora.
-
-### Exchange
-
-Exchange é o ponto onde o producer publica a mensagem.
-
-No RabbitMQ, o producer normalmente não publica direto na fila.
-
-Ele publica na exchange:
-
-```text
-Producer -> Exchange -> Queue -> Consumer
-```
-
-A exchange decide para quais filas a mensagem deve ir.
-
-### Routing key
-
-Routing key é uma chave usada para rotear mensagens.
-
-No nosso caso:
-
-```text
-pedido.criado
-```
-
-Com uma `TopicExchange`, conseguimos criar regras de roteamento:
-
-```text
-pedido.criado  recebe apenas pedido.criado
-pedido.*       recebe qualquer evento que comece com pedido.
-```
-
-Nesta aula, vamos usar a regra mais simples: a fila de notificações recebe mensagens com a routing key `pedido.criado`.
-
-### Binding
-
-Binding é a ligação entre uma exchange e uma fila.
-
-Sem binding, a mensagem chega na exchange, mas não sabe para qual fila deve ir.
-
-No nosso desenho:
+Vamos usar o desenho abaixo como referência durante o tutorial:
 
 ```text
 orders.exchange
@@ -257,41 +94,13 @@ orders.exchange
 notifications.order-created.queue
 ```
 
-### Publish/Subscribe
+Na prática, isso aparece em três pontos do código:
 
-Publish/Subscribe significa publicar e assinar.
+* no `orders-service`, a classe `OrderEventPublisher` publica o evento usando `RabbitTemplate`;
+* no `notifications-service`, a classe `OrderCreatedConsumer` escuta a fila usando `@RabbitListener`;
+* nas classes `RabbitConfig`, configuramos exchange, queue, binding e conversão JSON.
 
-O producer publica um evento.
-
-Os consumers interessados assinam esse evento por meio de filas e bindings.
-
-O ponto principal é que o producer não espera resposta.
-
-Isso deixa o sistema menos acoplado, porque o serviço de pedidos não depende diretamente do serviço de notificações para responder ao cliente.
-
-### RPC com RabbitMQ
-
-RPC significa request/response.
-
-Nesse padrão, uma aplicação envia uma mensagem e espera uma resposta.
-
-Com RabbitMQ, funciona assim:
-
-```text
-checkout-service envia consulta de estoque
-stock-service consome a consulta
-stock-service calcula a resposta
-stock-service devolve a resposta
-checkout-service recebe a resposta
-```
-
-Esse padrão é útil quando a resposta é realmente necessária.
-
-Mas use com cuidado.
-
-Se o `checkout-service` espera o `stock-service`, a requisição volta a ficar bloqueada. Se o estoque demora, o checkout demora. Se o estoque não responde, o checkout precisa lidar com timeout.
-
-Por isso, a prática principal desta aula usa evento. O RPC aparece no fim como comparação.
+O tutorial também cria um exemplo de RPC no final. Ele entra só como comparação com o pub/sub: no evento, publicamos e seguimos; no RPC, enviamos uma pergunta e esperamos resposta.
 
 ## Setup inicial
 
