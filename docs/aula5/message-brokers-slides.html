@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Slides - Message Brokers</title>
+    <style>
+      :root {
+        --desktop: #3a6ea5;
+        --window: #c0c0c0;
+        --window-light: #ffffff;
+        --window-dark: #404040;
+        --window-mid: #808080;
+        --title: #000080;
+        --title-text: #ffffff;
+        --text: #000000;
+        --link: #000080;
+        --surface-width: min(1040px, calc(100vw - 36px));
+        --header-height: 58px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        background-color: var(--desktop);
+        font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif;
+        font-size: 16px;
+        scrollbar-color: var(--window) #e0e0e0;
+        scrollbar-width: auto;
+      }
+
+      ::-webkit-scrollbar {
+        width: 18px;
+        height: 18px;
+        background: #e0e0e0;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: #e0e0e0;
+        border-top: 2px solid var(--window-dark);
+        border-left: 2px solid var(--window-dark);
+        border-right: 2px solid var(--window-light);
+        border-bottom: 2px solid var(--window-light);
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: var(--window);
+        border-top: 2px solid var(--window-light);
+        border-left: 2px solid var(--window-light);
+        border-right: 2px solid var(--window-dark);
+        border-bottom: 2px solid var(--window-dark);
+      }
+
+      ::-webkit-scrollbar-button {
+        width: 18px;
+        height: 18px;
+        background: var(--window);
+        border-top: 2px solid var(--window-light);
+        border-left: 2px solid var(--window-light);
+        border-right: 2px solid var(--window-dark);
+        border-bottom: 2px solid var(--window-dark);
+      }
+
+      ::-webkit-scrollbar-corner {
+        background: var(--window);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        height: var(--header-height);
+        padding: 8px;
+        background: var(--window);
+        border-bottom: 2px solid var(--window-dark);
+        box-shadow: inset 0 2px var(--window-light);
+      }
+
+      .topbar-inner {
+        width: var(--surface-width);
+        height: 100%;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .brand {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .brand strong {
+        font-size: 0.95rem;
+      }
+
+      .brand span {
+        font-size: 0.78rem;
+      }
+
+      .topnav {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding: 2px;
+      }
+
+      .topnav a,
+      .pager a {
+        flex: 0 0 auto;
+        color: var(--text);
+        background: var(--window);
+        border-top: 2px solid var(--window-light);
+        border-left: 2px solid var(--window-light);
+        border-right: 2px solid var(--window-dark);
+        border-bottom: 2px solid var(--window-dark);
+        padding: 7px 10px;
+        font-size: 0.82rem;
+        line-height: 1;
+      }
+
+      .topnav a:active,
+      .pager a:active {
+        border-top-color: var(--window-dark);
+        border-left-color: var(--window-dark);
+        border-right-color: var(--window-light);
+        border-bottom-color: var(--window-light);
+      }
+
+      .topnav b {
+        color: var(--link);
+      }
+
+      .deck {
+        padding: 18px 0 30px;
+      }
+
+      .slide {
+        min-height: calc(100vh - var(--header-height));
+        scroll-margin-top: calc(var(--header-height) + 10px);
+        padding: 14px 0;
+        display: grid;
+        place-items: center;
+      }
+
+      .window {
+        width: var(--surface-width);
+        min-height: min(700px, calc(100vh - var(--header-height) - 46px));
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        background: var(--window);
+        border-top: 2px solid var(--window-light);
+        border-left: 2px solid var(--window-light);
+        border-right: 2px solid var(--window-dark);
+        border-bottom: 2px solid var(--window-dark);
+        box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.28);
+      }
+
+      .titlebar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        min-height: 34px;
+        padding: 5px 6px 5px 10px;
+        background: var(--title);
+        color: var(--title-text);
+        font-weight: 700;
+      }
+
+      .titlebar span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .controls {
+        display: flex;
+        gap: 4px;
+      }
+
+      .control {
+        width: 22px;
+        height: 20px;
+        display: grid;
+        place-items: center;
+        color: var(--text);
+        background: var(--window);
+        border-top: 2px solid var(--window-light);
+        border-left: 2px solid var(--window-light);
+        border-right: 2px solid var(--window-dark);
+        border-bottom: 2px solid var(--window-dark);
+        font-size: 0.8rem;
+        line-height: 1;
+      }
+
+      .content {
+        padding: 42px;
+        display: grid;
+        align-content: center;
+        gap: 24px;
+      }
+
+      .content.compact {
+        align-content: start;
+      }
+
+      .kicker {
+        display: inline-block;
+        width: fit-content;
+        padding: 5px 8px;
+        background: #ffffcc;
+        border: 1px solid var(--window-dark);
+        font-size: 0.88rem;
+        font-weight: 700;
+      }
+
+      .title-xl {
+        max-width: 16ch;
+        font-size: clamp(3rem, 6.4vw, 5.4rem);
+        line-height: 1.05;
+        font-weight: 700;
+      }
+
+      .title-lg {
+        max-width: 22ch;
+        font-size: clamp(2.4rem, 4.4vw, 4rem);
+        line-height: 1.12;
+        font-weight: 700;
+      }
+
+      .lead {
+        max-width: 54ch;
+        font-size: clamp(1.15rem, 2vw, 1.55rem);
+        line-height: 1.45;
+      }
+
+      .big {
+        font-size: clamp(1.45rem, 3.3vw, 2.5rem);
+        line-height: 1.2;
+        font-weight: 700;
+      }
+
+      .grid-2,
+      .grid-3 {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .panel {
+        padding: 18px;
+        background: #ffffff;
+        border-top: 2px solid var(--window-dark);
+        border-left: 2px solid var(--window-dark);
+        border-right: 2px solid var(--window-light);
+        border-bottom: 2px solid var(--window-light);
+      }
+
+      .panel h3 {
+        margin-bottom: 10px;
+        font-size: 1.1rem;
+      }
+
+      .panel p {
+        line-height: 1.45;
+      }
+
+      .list {
+        margin: 0;
+        padding-left: 22px;
+        display: grid;
+        gap: 12px;
+        font-size: clamp(1.05rem, 1.7vw, 1.35rem);
+        line-height: 1.32;
+      }
+
+      .code,
+      pre {
+        font-family: "Courier New", monospace;
+      }
+
+      .code {
+        display: inline-block;
+        max-width: 100%;
+        padding: 2px 5px;
+        color: #000000;
+        background: #ffffff;
+        border: 1px solid var(--window-mid);
+        overflow-wrap: anywhere;
+      }
+
+      pre {
+        margin: 0;
+        padding: 16px;
+        overflow-x: auto;
+        color: #000000;
+        background: #ffffff;
+        border-top: 2px solid var(--window-dark);
+        border-left: 2px solid var(--window-dark);
+        border-right: 2px solid var(--window-light);
+        border-bottom: 2px solid var(--window-light);
+        font-size: clamp(1rem, 1.6vw, 1.25rem);
+        line-height: 1.35;
+      }
+
+      .callout {
+        padding: 18px;
+        background: #ffffcc;
+        border: 2px solid #000000;
+        font-size: clamp(1.1rem, 1.8vw, 1.45rem);
+        line-height: 1.35;
+      }
+
+      .pager {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px;
+        border-top: 2px solid var(--window-mid);
+      }
+
+      .pager span {
+        align-self: center;
+        font-size: 0.85rem;
+      }
+
+      @media (max-width: 860px) {
+        .topbar {
+          height: auto;
+        }
+
+        .topbar-inner,
+        .grid-2,
+        .grid-3 {
+          grid-template-columns: 1fr;
+        }
+
+        .slide {
+          min-height: auto;
+        }
+
+        .window {
+          min-height: auto;
+        }
+
+        .content {
+          padding: 24px;
+        }
+      }
+
+      @media (max-width: 560px) {
+        :root {
+          --surface-width: calc(100vw - 18px);
+        }
+
+        body {
+          font-size: 15px;
+        }
+
+        .content {
+          padding: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <strong>UPF APIs</strong>
+          <span>Aula 5 · Slides</span>
+        </div>
+        <nav class="topnav" aria-label="Mapa dos slides">
+          <a href="#slide-01"><b>01</b></a>
+          <a href="#slide-02"><b>02</b></a>
+          <a href="#slide-03"><b>03</b></a>
+          <a href="#slide-04"><b>04</b></a>
+          <a href="#slide-05"><b>05</b></a>
+          <a href="#slide-06"><b>06</b></a>
+          <a href="#slide-07"><b>07</b></a>
+          <a href="#slide-08"><b>08</b></a>
+          <a href="#slide-09"><b>09</b></a>
+          <a href="#slide-10"><b>10</b></a>
+          <a href="#slide-11"><b>11</b></a>
+          <a href="#slide-12"><b>12</b></a>
+          <a href="#slide-13"><b>13</b></a>
+          <a href="#slide-14"><b>14</b></a>
+          <a href="#slide-15"><b>15</b></a>
+          <a href="#slide-16"><b>16</b></a>
+          <a href="#slide-17"><b>17</b></a>
+          <a href="#slide-18"><b>18</b></a>
+          <a href="#slide-19"><b>19</b></a>
+          <a href="#slide-20"><b>20</b></a>
+          <a href="#slide-21"><b>21</b></a>
+          <a href="#slide-22"><b>22</b></a>
+          <a href="#slide-23"><b>23</b></a>
+          <a href="#slide-24"><b>24</b></a>
+          <a href="#slide-25"><b>25</b></a>
+          <a href="#slide-26"><b>26</b></a>
+          <a href="#slide-27"><b>27</b></a>
+          <a href="#slide-28"><b>28</b></a>
+          <a href="#slide-29"><b>29</b></a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="deck">
+      <section class="slide" id="slide-01">
+        <article class="window">
+          <div class="titlebar"><span>message-brokers.ppt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <span class="kicker">Aula 5</span>
+            <h1 class="title-xl">Message Brokers, filas e eventos</h1>
+            <p class="lead">RabbitMQ e Kafka no contexto de microsservicos, APIs REST e comunicacao assincrona.</p>
+          </div>
+          <div class="pager"><span>01 / 29</span><a href="#slide-02">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-02">
+        <article class="window">
+          <div class="titlebar"><span>objetivo.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Objetivo da aula</h2>
+            <p class="big">Entender por que um servico publica um evento em vez de chamar tudo por HTTP.</p>
+            <div class="callout">A pergunta principal: como avisar outros servicos sem deixar o cliente esperando tudo terminar?</div>
+          </div>
+          <div class="pager"><a href="#slide-01">Anterior</a><span>02 / 29</span><a href="#slide-03">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-03">
+        <article class="window">
+          <div class="titlebar"><span>resultado-final.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content compact">
+            <h2 class="title-lg">Resultado final</h2>
+            <pre>Pedidos API
+   |
+   | publica pedido.criado
+   v
+Message Broker
+   |
+   +--&gt; Notificacoes
+   +--&gt; Faturamento
+   +--&gt; Analytics</pre>
+          </div>
+          <div class="pager"><a href="#slide-02">Anterior</a><span>03 / 29</span><a href="#slide-04">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-04">
+        <article class="window">
+          <div class="titlebar"><span>contexto-http.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">HTTP funciona bem</h2>
+            <p class="lead">Quando a aplicacao precisa de resposta imediata, HTTP continua sendo a escolha natural.</p>
+            <ul class="list">
+              <li>Buscar um usuario.</li>
+              <li>Criar um produto.</li>
+              <li>Atualizar um cadastro.</li>
+            </ul>
+          </div>
+          <div class="pager"><a href="#slide-03">Anterior</a><span>04 / 29</span><a href="#slide-05">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-05">
+        <article class="window">
+          <div class="titlebar"><span>quando-http-doi.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">O problema aparece no pedido</h2>
+            <p class="lead">Criar o pedido e o ponto principal. O resto pode acontecer depois.</p>
+            <ul class="list">
+              <li>Enviar e-mail.</li>
+              <li>Baixar estoque.</li>
+              <li>Iniciar faturamento.</li>
+              <li>Atualizar metricas.</li>
+            </ul>
+          </div>
+          <div class="pager"><a href="#slide-04">Anterior</a><span>05 / 29</span><a href="#slide-06">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-06">
+        <article class="window">
+          <div class="titlebar"><span>acoplamento.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Acoplamento</h2>
+            <p class="big">A API de pedidos comeca a conhecer servicos demais.</p>
+            <div class="callout">Se o e-mail cai, o pedido pode falhar mesmo estando valido.</div>
+          </div>
+          <div class="pager"><a href="#slide-05">Anterior</a><span>06 / 29</span><a href="#slide-07">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-07">
+        <article class="window">
+          <div class="titlebar"><span>message-broker.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Message broker</h2>
+            <p class="big">Uma aplicacao intermediaria que recebe mensagens e entrega para outros sistemas.</p>
+            <div class="callout">Pense nele como uma central de distribuicao: quem envia nao precisa saber todos os destinos.</div>
+          </div>
+          <div class="pager"><a href="#slide-06">Anterior</a><span>07 / 29</span><a href="#slide-08">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-08">
+        <article class="window">
+          <div class="titlebar"><span>por-baixo-dos-panos.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Por baixo dos panos</h2>
+            <ul class="list">
+              <li>Desacopla quem envia de quem recebe.</li>
+              <li>Permite comunicacao assincrona.</li>
+              <li>Ajuda no roteamento e reprocessamento.</li>
+            </ul>
+          </div>
+          <div class="pager"><a href="#slide-07">Anterior</a><span>08 / 29</span><a href="#slide-09">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-09">
+        <article class="window">
+          <div class="titlebar"><span>producer.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Producer</h2>
+            <p class="big">Quem envia a mensagem.</p>
+            <pre>Pedidos API --&gt; Message Broker</pre>
+            <div class="callout">No exemplo da aula, o producer e a API de pedidos.</div>
+          </div>
+          <div class="pager"><a href="#slide-08">Anterior</a><span>09 / 29</span><a href="#slide-10">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-10">
+        <article class="window">
+          <div class="titlebar"><span>consumer.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Consumer</h2>
+            <p class="big">Quem recebe e processa a mensagem.</p>
+            <pre>Broker --&gt; Notificacoes
+Broker --&gt; Faturamento
+Broker --&gt; Analytics</pre>
+            <div class="callout">Cada consumer cuida da sua responsabilidade.</div>
+          </div>
+          <div class="pager"><a href="#slide-09">Anterior</a><span>10 / 29</span><a href="#slide-11">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-11">
+        <article class="window">
+          <div class="titlebar"><span>evento.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Evento</h2>
+            <p class="big">Uma mensagem dizendo que algo importante ja aconteceu.</p>
+            <div class="callout"><span class="code">pedido.criado</span></div>
+            <p class="lead">O nome costuma ficar no passado porque representa um fato do negocio.</p>
+          </div>
+          <div class="pager"><a href="#slide-10">Anterior</a><span>11 / 29</span><a href="#slide-12">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-12">
+        <article class="window">
+          <div class="titlebar"><span>ordem-vs-fato.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Nao publique ordem</h2>
+            <div class="grid-2">
+              <div class="panel"><h3>Evite</h3><p><span class="code">envie email</span></p></div>
+              <div class="panel"><h3>Prefira</h3><p><span class="code">pedido.criado</span></p></div>
+            </div>
+          </div>
+          <div class="pager"><a href="#slide-11">Anterior</a><span>12 / 29</span><a href="#slide-13">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-13">
+        <article class="window">
+          <div class="titlebar"><span>fila.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Fila</h2>
+            <p class="big">Mensagens aguardam processamento.</p>
+            <pre>pedido.criado --&gt; fila notificacoes --&gt; consumer</pre>
+            <div class="callout">Boa quando um trabalho precisa ser feito por uma instancia disponivel.</div>
+          </div>
+          <div class="pager"><a href="#slide-12">Anterior</a><span>13 / 29</span><a href="#slide-14">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-14">
+        <article class="window">
+          <div class="titlebar"><span>ack.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">ACK</h2>
+            <p class="big">O consumer confirma: processei com sucesso.</p>
+            <div class="callout">Sem confirmacao, o broker nao sabe se deu certo.</div>
+          </div>
+          <div class="pager"><a href="#slide-13">Anterior</a><span>14 / 29</span><a href="#slide-15">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-15">
+        <article class="window">
+          <div class="titlebar"><span>rabbitmq.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content compact">
+            <h2 class="title-lg">RabbitMQ</h2>
+            <pre>Producer
+   |
+   v
+Exchange
+   |
+   v
+Queue
+   |
+   v
+Consumer</pre>
+            <p class="lead">RabbitMQ costuma encaixar bem em filas de trabalho e roteamento por regras.</p>
+          </div>
+          <div class="pager"><a href="#slide-14">Anterior</a><span>15 / 29</span><a href="#slide-16">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-16">
+        <article class="window">
+          <div class="titlebar"><span>rabbitmq-caso-real.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Caso iFood</h2>
+            <div class="grid-2">
+              <div class="panel"><h3>Problema</h3><p>O pedido foi criado, mas enviar notificacao, confirmar loja e gerar cobranca nao precisam travar a tela.</p></div>
+              <div class="panel"><h3>Solucao</h3><p>Usar RabbitMQ com uma exchange de pedidos e filas separadas para notificacao, faturamento e analytics. A API publica <span class="code">pedido.criado</span> uma vez; cada worker processa sua fila sem bloquear o cliente.</p></div>
+            </div>
+            <div class="callout">RabbitMQ ajuda quando existe trabalho claro para ser distribuido entre consumidores.</div>
+          </div>
+          <div class="pager"><a href="#slide-15">Anterior</a><span>16 / 29</span><a href="#slide-17">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-17">
+        <article class="window">
+          <div class="titlebar"><span>exchange.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Exchange decide a fila</h2>
+            <div class="grid-3">
+              <div class="panel"><h3>Routing key</h3><p>Etiqueta da mensagem: <span class="code">pedido.criado</span>.</p></div>
+              <div class="panel"><h3>Binding key</h3><p>Regra da fila: quero <span class="code">pedido.criado</span>.</p></div>
+              <div class="panel"><h3>Binding</h3><p>A ligacao entre exchange, fila e regra.</p></div>
+            </div>
+            <pre>orders.exchange -- pedido.criado --&gt; notifications.queue</pre>
+          </div>
+          <div class="pager"><a href="#slide-16">Anterior</a><span>17 / 29</span><a href="#slide-18">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-18">
+        <article class="window">
+          <div class="titlebar"><span>direct-exchange.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Direct exchange</h2>
+            <div class="grid-2">
+              <div class="panel"><h3>Analogia</h3><p>Etiqueta exata no pacote. Se a etiqueta bate, entra naquela fila.</p></div>
+              <div class="panel"><h3>Caso real</h3><p><span class="code">pagamento.aprovado</span> vai direto para a fila de faturamento.</p></div>
+            </div>
+            <pre>routing key: pagamento.aprovado
+binding key: pagamento.aprovado</pre>
+          </div>
+          <div class="pager"><a href="#slide-17">Anterior</a><span>18 / 29</span><a href="#slide-19">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-19">
+        <article class="window">
+          <div class="titlebar"><span>fanout-exchange.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Fanout exchange</h2>
+            <div class="grid-2">
+              <div class="panel"><h3>Analogia</h3><p>Um aviso no alto-falante. Todo mundo conectado recebe.</p></div>
+              <div class="panel"><h3>Caso real</h3><p><span class="code">pedido.criado</span> avisa notificacoes, analytics e antifraude.</p></div>
+            </div>
+            <pre>pedido.criado
+   +--&gt; notifications.queue
+   +--&gt; analytics.queue
+   +--&gt; antifraud.queue</pre>
+          </div>
+          <div class="pager"><a href="#slide-18">Anterior</a><span>19 / 29</span><a href="#slide-20">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-20">
+        <article class="window">
+          <div class="titlebar"><span>topic-exchange-rabbit.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Topic exchange</h2>
+            <div class="grid-2">
+              <div class="panel"><h3>Analogia</h3><p>Filtro por assunto. A fila escolhe um padrao, nao uma etiqueta unica.</p></div>
+              <div class="panel"><h3>Caso real</h3><p>Suporte recebe todo evento de pedido: <span class="code">pedido.*</span>.</p></div>
+            </div>
+            <pre>pedido.* recebe:
+pedido.criado
+pedido.cancelado
+pedido.entregue</pre>
+          </div>
+          <div class="pager"><a href="#slide-19">Anterior</a><span>20 / 29</span><a href="#slide-21">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-21">
+        <article class="window">
+          <div class="titlebar"><span>kafka.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content compact">
+            <h2 class="title-lg">Kafka</h2>
+            <pre>Producer --&gt; Topic --&gt; Consumer Group --&gt; Consumer</pre>
+            <p class="lead">O foco esta no fluxo de eventos ao longo do tempo.</p>
+            <div class="callout">Kafka costuma fazer sentido quando existe alto volume, historico e necessidade de replay.</div>
+          </div>
+          <div class="pager"><a href="#slide-20">Anterior</a><span>21 / 29</span><a href="#slide-22">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-22">
+        <article class="window">
+          <div class="titlebar"><span>kafka-caso-real.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Caso Uber</h2>
+            <div class="grid-2">
+              <div class="panel"><h3>Problema</h3><p>Muitas localizacoes, status de corrida e eventos chegando o tempo todo.</p></div>
+              <div class="panel"><h3>Solucao</h3><p>Usar topicos do Kafka para receber eventos como <span class="code">corrida.iniciada</span>, <span class="code">motorista.localizacao_atualizada</span> e <span class="code">corrida.finalizada</span>. Diferentes consumer groups leem o mesmo historico para mapa em tempo real, cobranca e analytics.</p></div>
+            </div>
+            <div class="callout">Nao e sobre uma tarefa unica. E sobre acompanhar um fluxo continuo de eventos.</div>
+          </div>
+          <div class="pager"><a href="#slide-21">Anterior</a><span>22 / 29</span><a href="#slide-23">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-23">
+        <article class="window">
+          <div class="titlebar"><span>topico-kafka.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content compact">
+            <h2 class="title-lg">Topico no Kafka</h2>
+            <pre>topico pedidos
+   |
+   +--&gt; grupo notificacoes
+   +--&gt; grupo faturamento
+   +--&gt; grupo analytics</pre>
+            <p class="lead">O topico guarda eventos de um assunto. Varios grupos podem ler o mesmo historico.</p>
+          </div>
+          <div class="pager"><a href="#slide-22">Anterior</a><span>23 / 29</span><a href="#slide-24">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-24">
+        <article class="window">
+          <div class="titlebar"><span>consumer-groups.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Consumer group</h2>
+            <p class="big">Um grupo de consumers trabalhando junto no mesmo servico.</p>
+            <div class="grid-2">
+              <div class="panel"><h3>Mesmo grupo</h3><p>Divide o trabalho entre instancias.</p></div>
+              <div class="panel"><h3>Grupos diferentes</h3><p>Cada grupo recebe sua leitura do evento.</p></div>
+            </div>
+          </div>
+          <div class="pager"><a href="#slide-23">Anterior</a><span>24 / 29</span><a href="#slide-25">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-25">
+        <article class="window">
+          <div class="titlebar"><span>partitions.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Partition</h2>
+            <p class="big">Uma divisao interna do topico.</p>
+            <ul class="list">
+              <li>Ajuda Kafka a processar mais eventos em paralelo.</li>
+              <li>Kafka garante ordem dentro da partition.</li>
+              <li>Para pedido, use <span class="code">pedidoId</span> como chave.</li>
+            </ul>
+          </div>
+          <div class="pager"><a href="#slide-24">Anterior</a><span>25 / 29</span><a href="#slide-26">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-26">
+        <article class="window">
+          <div class="titlebar"><span>comparacao.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">RabbitMQ ou Kafka?</h2>
+            <div class="grid-2">
+              <div class="panel"><h3>RabbitMQ</h3><p>Fila, tarefa, roteamento simples.</p></div>
+              <div class="panel"><h3>Kafka</h3><p>Topico, historico, replay, alto volume.</p></div>
+            </div>
+            <p class="lead">A escolha depende do comportamento esperado, nao apenas do nome da ferramenta.</p>
+          </div>
+          <div class="pager"><a href="#slide-25">Anterior</a><span>26 / 29</span><a href="#slide-27">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-27">
+        <article class="window">
+          <div class="titlebar"><span>quando-usar.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Quando usar mensageria</h2>
+            <ul class="list">
+              <li>Uma acao dispara varias reacoes.</li>
+              <li>Nem tudo precisa acontecer agora.</li>
+              <li>Varios servicos reagem ao mesmo fato.</li>
+            </ul>
+          </div>
+          <div class="pager"><a href="#slide-26">Anterior</a><span>27 / 29</span><a href="#slide-28">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-28">
+        <article class="window">
+          <div class="titlebar"><span>rest-vs-evento.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">REST nao some</h2>
+            <div class="grid-2">
+              <div class="panel"><h3>Use HTTP</h3><p>Comando ou consulta com resposta imediata.</p></div>
+              <div class="panel"><h3>Use evento</h3><p>Fato que outros servicos podem processar depois.</p></div>
+            </div>
+          </div>
+          <div class="pager"><a href="#slide-27">Anterior</a><span>28 / 29</span><a href="#slide-29">Proximo</a></div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-29">
+        <article class="window">
+          <div class="titlebar"><span>falhas.txt</span><div class="controls"><div class="control">_</div><div class="control">[]</div><div class="control">x</div></div></div>
+          <div class="content">
+            <h2 class="title-lg">Cuidados de producao</h2>
+            <p class="lead">Mensageria melhora o desacoplamento, mas exige pensar em repeticao e falhas.</p>
+            <ul class="list">
+              <li>Idempotencia evita efeito duplicado.</li>
+              <li>Retry precisa de limite.</li>
+              <li>Dead letter tira erro do fluxo principal.</li>
+            </ul>
+          </div>
+          <div class="pager"><a href="#slide-28">Anterior</a><span>29 / 29</span><a href="#slide-01">Inicio</a></div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,997 +1,1254 @@
-# Tutorial: Implementando Observabilidade em NestJS
+# Tutorial: Observabilidade com Spring Boot, Actuator, Micrometer e Prometheus
 
-## Introdução
+## Objetivo da aula
 
-Este tutorial demonstra como implementar **observabilidade profissional** em uma aplicação NestJS. Vamos criar:
+Agora que a parte teórica já explicou logs, métricas, traces, health checks e monitoramento, vamos colocar a primeira parte disso em prática usando Java 17 e Spring Boot.
 
-1. **Logger Customizado** → substitui `console.log` por logging estruturado
-2. **Logging Interceptor** → mede tempo de requisições e registra automaticamente
-3. **Health Check** → verifica saúde da aplicação e dependências
-4. **Métricas Prometheus** → expõe métricas para coleta
-5. **Tracing OpenTelemetry** → rastreia requisições através do sistema
+Vamos construir uma API simples de pedidos e adicionar observabilidade básica nela:
 
-**Objetivo:** Aprender a implementar observabilidade de forma profissional, sem usar `console.log`, seguindo boas práticas do NestJS.
+* logs com SLF4J;
+* health check com Spring Boot Actuator;
+* métricas automáticas com Micrometer;
+* endpoint Prometheus para coleta de métricas;
+* Prometheus rodando em Docker para buscar essas métricas.
 
-## Pré-requisitos
+O objetivo não é criar uma plataforma completa de observabilidade. Vamos começar pelo que faz sentido para uma primeira prática: a aplicação precisa dizer se está saudável, registrar eventos importantes e expor métricas que possam ser coletadas.
 
-- Node.js 18 ou superior
-- npm ou yarn
-- Conhecimento básico de TypeScript e NestJS
-- NestJS CLI instalado globalmente (`npm install -g @nestjs/cli`)
+## Resultado final
 
-## Passo 1: Criar Novo Projeto NestJS
+Ao terminar, teremos:
 
-### 1.1 Criar Projeto
-
-```bash
-# Criar novo projeto NestJS
-nest new observability-api
-
-# Quando perguntado sobre package manager, escolha npm ou yarn
-# Nome do projeto: observability-api
+```text
+observability-api -> http://localhost:8080
+MongoDB           -> localhost:27017
+Prometheus        -> http://localhost:9090
+Swagger UI        -> http://localhost:8080/swagger-ui.html
+Actuator health   -> http://localhost:8080/actuator/health
+Actuator metrics  -> http://localhost:8080/actuator/metrics
+Prometheus scrape -> http://localhost:8080/actuator/prometheus
 ```
 
-### 1.2 Navegar para o Projeto
+A API terá estes endpoints:
 
-```bash
-cd observability-api
+```text
+POST /api/v1/orders
+GET  /api/v1/orders
+GET  /api/v1/orders/{id}
 ```
 
-### 1.3 Instalar Dependências de Observabilidade
+A estrutura principal ficará assim:
 
-```bash
-npm install @nestjs/terminus prom-client
-```
-
-**Nota:** O pacote `prom-client` já inclui tipos TypeScript, então não é necessário instalar `@types/prom-client`.
-
-**Dependências:**
-
-- `@nestjs/terminus` → Health checks
-- `prom-client` → Métricas Prometheus
-
-**Observação:** Para OpenTelemetry, vamos usar uma abordagem simplificada primeiro. Em produção, você pode instalar `@nestjs/otel` para tracing completo.
-
-### 1.4 Criar Estrutura de Pastas
-
-```bash
-# Criar pastas para organização
-mkdir -p src/common/logger
-mkdir -p src/common/interceptors
-mkdir -p src/health
-mkdir -p src/metrics
-```
-
-**Estrutura final do projeto:**
-
-```
+```text
 observability-api/
 ├── src/
-│   ├── common/
-│   │   ├── logger/
-│   │   │   └── my-logger.service.ts
-│   │   └── interceptors/
-│   │       └── logging.interceptor.ts
-│   ├── health/
-│   │   ├── health.controller.ts
-│   │   └── health.module.ts
-│   ├── metrics/
-│   │   ├── metrics.controller.ts
-│   │   ├── metrics.service.ts
-│   │   └── metrics.module.ts
-│   ├── app.controller.ts
-│   ├── app.module.ts
-│   ├── app.service.ts
-│   └── main.ts
-└── package.json
+│   └── main/
+│       ├── java/
+│       │   └── br/edu/upf/observabilityapi/
+│       │       ├── ObservabilityApiApplication.java
+│       │       ├── controller/
+│       │       │   └── OrderController.java
+│       │       ├── dto/
+│       │       │   ├── CreateOrderRequest.java
+│       │       │   └── OrderResponse.java
+│       │       ├── mapper/
+│       │       │   └── OrderMapper.java
+│       │       ├── model/
+│       │       │   └── Order.java
+│       │       ├── repository/
+│       │       │   └── OrderRepository.java
+│       │       └── service/
+│       │           └── OrderService.java
+│       └── resources/
+│           └── application.properties
+├── build.gradle
+├── docker-compose.yml
+└── prometheus.yml
 ```
 
-## Passo 2: Criar Logger Customizado
+## Contexto
 
-### 2.1 Por que um Logger Customizado?
+Uma API pode estar funcionando no seu computador e mesmo assim ser difícil de acompanhar quando vai para um ambiente real.
 
-**Problema com `console.log`:**
+Quando a aplicação roda em produção, não basta saber que ela subiu. Precisamos responder perguntas como:
 
-- Não tem níveis de log (info, error, warn, debug)
-- Não tem contexto (não sabemos de onde veio o log)
-- Difícil filtrar e buscar logs
-- Não é estruturado (difícil processar automaticamente)
+* a aplicação está saudável?
+* o MongoDB está acessível?
+* quantas requisições estão chegando?
+* quais endpoints estão sendo mais chamados?
+* quanto tempo as requisições estão levando?
+* os erros aumentaram depois de uma alteração?
 
-**Solução: Logger Customizado**
+O Spring Boot ajuda bastante nesse início porque o Actuator expõe informações operacionais da aplicação. O Micrometer organiza métricas em um formato que outras ferramentas conseguem entender. O Prometheus coleta essas métricas periodicamente.
 
-- Níveis de log claros (log, error, warn, debug)
-- Contexto automático (nome da classe/módulo)
-- Estruturado (pode ser processado por ferramentas)
-- Pode ser estendido (adicionar formatação, envio para serviços externos)
+Por baixo dos panos, a ideia é esta:
 
-### 2.2 Criar MyLoggerService
+```text
+Cliente chama a API
+        |
+        v
+Spring Boot processa a requisição
+        |
+        v
+Actuator e Micrometer registram saúde e métricas
+        |
+        v
+Prometheus coleta /actuator/prometheus
+```
 
-Criar arquivo `src/common/logger/my-logger.service.ts`:
+## Explicação conceitual
+
+Antes do código, vale separar as peças.
+
+`Spring Boot Actuator` adiciona endpoints operacionais à aplicação. Esses endpoints não fazem parte da regra de negócio de pedidos. Eles existem para mostrar informações sobre a aplicação em execução.
+
+`Health check` responde se a aplicação está saudável. Quando usamos MongoDB, o Actuator consegue indicar se a conexão com o banco está funcionando.
+
+`Micrometer` é a camada de métricas usada pelo Spring Boot. Ele mede informações como quantidade de requisições, tempo de resposta, uso de memória e comportamento da JVM.
+
+`Prometheus` é uma ferramenta externa. Ele entra na aplicação periodicamente, lê o endpoint `/actuator/prometheus` e guarda essas métricas ao longo do tempo.
+
+`Logs` registram eventos importantes. Nesta aula, vamos usar SLF4J, que já é o padrão no ecossistema Spring Boot. Em vez de espalhar `System.out.println`, usamos um logger com contexto e nível de severidade.
+
+## Setup inicial
+
+Você precisa ter instalado:
+
+* Java JDK 17;
+* Docker e Docker Compose;
+* um editor de código;
+* um terminal;
+* Postman, Insomnia ou curl para testar a API.
+
+No Windows, use `gradlew.bat`.
+
+No Linux, use `./gradlew`.
+
+Use caminhos genéricos nos comandos:
 
 ```bash
-# Criar arquivo
-touch src/common/logger/my-logger.service.ts
+cd /caminho/para/a/pasta-do-projeto
 ```
 
-Editar o arquivo:
+## Passo a passo
 
-```typescript
-import { Injectable, ConsoleLogger } from '@nestjs/common';
+### 1. Criar o projeto no Spring Initializr
 
-/**
- * Logger Customizado
- * 
- * Por que criar um logger customizado?
- * - Substitui console.log por logging estruturado
- * - Adiciona contexto (nome da classe/módulo)
- * - Permite extensão futura (envio para serviços externos, formatação JSON)
- * - Segue padrões do NestJS
- * 
- * Como usar:
- * - Injetar no construtor: constructor(private logger: MyLoggerService) {}
- * - Usar: this.logger.log('Mensagem', 'Contexto')
- */
-@Injectable()
-export class MyLoggerService extends ConsoleLogger {
-  /**
-   * Log de informação geral
-   * Use para registrar eventos normais do sistema
-   */
-  log(message: string, context?: string) {
-    // Formatação melhorada com timestamp e contexto
-    super.log(message, context || this.context || 'Application');
-  }
+Abra o Spring Initializr no navegador:
 
-  /**
-   * Log de erros
-   * Use para registrar erros e exceções
-   */
-  error(message: string, stack?: string, context?: string) {
-    // Stack trace incluído para debugging
-    super.error(message, stack, context || this.context || 'Application');
-  }
+```text
+https://start.spring.io/
+```
 
-  /**
-   * Log de avisos
-   * Use para situações que merecem atenção mas não são erros
-   */
-  warn(message: string, context?: string) {
-    super.warn(message, context || this.context || 'Application');
-  }
+Configure o projeto assim:
 
-  /**
-   * Log de debug
-   * Use para informações detalhadas durante desenvolvimento
-   */
-  debug(message: string, context?: string) {
-    super.debug(message, context || this.context || 'Application');
-  }
+```text
+Project: Gradle - Groovy
+Language: Java
+Spring Boot: versão estável 3.x
+Group: br.edu.upf
+Artifact: observability-api
+Name: observability-api
+Package name: br.edu.upf.observabilityapi
+Packaging: Jar
+Java: 17
+```
 
-  /**
-   * Log de informações verbosas
-   * Use para informações muito detalhadas
-   */
-  verbose(message: string, context?: string) {
-    super.verbose(message, context || this.context || 'Application');
-  }
+Adicione estas dependências:
+
+* Spring Web;
+* Spring Data MongoDB;
+* Validation;
+* Spring Boot Actuator;
+* Lombok.
+
+Depois clique em `Generate`, baixe o arquivo `.zip`, descompacte e abra a pasta no editor.
+
+Entre na pasta do projeto:
+
+```bash
+cd /caminho/para/observability-api
+```
+
+O Gradle Wrapper já vem no projeto. Isso evita depender de uma instalação global do Gradle.
+
+### 2. Ajustar o build.gradle
+
+Abra o arquivo `build.gradle` e confira se ele está parecido com este:
+
+```groovy
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.5.14'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'br.edu.upf'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.14'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
 }
 ```
 
-**Explicação:**
+O Spring Initializr já adiciona boa parte disso. O que estamos garantindo aqui é a presença de três dependências importantes para esta aula:
 
-- `extends ConsoleLogger`: Herda funcionalidades do logger padrão do NestJS
-- `@Injectable()`: Permite injeção de dependência
-- Métodos sobrescritos: Adicionam formatação e contexto padrão
-- Contexto automático: Se não fornecido, usa o contexto da classe
+* `spring-boot-starter-actuator`, para health checks e endpoints operacionais;
+* `micrometer-registry-prometheus`, para expor métricas no formato Prometheus;
+* `springdoc-openapi`, para testar a API pelo Swagger.
 
-## Passo 3: Criar Logging Interceptor
+### 3. Configurar a aplicação
 
-### 3.1 Por que um Interceptor?
+Edite `src/main/resources/application.properties`:
 
-**Problema:** Sem interceptor, você precisa adicionar logs manualmente em cada endpoint:
+```properties
+spring.application.name=observability-api
+server.port=${PORT:8080}
 
-```typescript
-//  Ruim: Logging manual em cada método
-@Get()
-findAll() {
-  console.log('Iniciando busca de pagamentos');
-  const start = Date.now();
-  const result = this.service.findAll();
-  const time = Date.now() - start;
-  console.log(`Busca concluída em ${time}ms`);
-  return result;
+spring.data.mongodb.uri=${MONGODB_URI:mongodb://localhost:27017/observability_api}
+
+springdoc.swagger-ui.path=/swagger-ui.html
+
+management.endpoints.web.exposure.include=health,info,metrics,prometheus
+management.endpoint.health.show-details=always
+management.metrics.tags.application=${spring.application.name}
+```
+
+`spring.application.name` dá um nome para a aplicação. Esse nome também aparece como tag nas métricas.
+
+`spring.data.mongodb.uri` usa uma variável de ambiente quando ela existir. Se não existir, a API conecta no MongoDB local.
+
+`management.endpoints.web.exposure.include` define quais endpoints do Actuator ficam disponíveis pela web. Por padrão, o Spring Boot não expõe tudo, e isso é bom. Em uma aplicação real, expor endpoint operacional exige cuidado.
+
+`management.endpoint.health.show-details=always` mostra detalhes do health check. Para aula isso ajuda, porque conseguimos ver se o MongoDB está saudável. Em produção, essa configuração precisa ser avaliada com cuidado para não expor informação demais.
+
+### 4. Criar o Docker Compose
+
+Na raiz do projeto, crie o arquivo `docker-compose.yml`:
+
+```yaml
+services:
+  mongodb:
+    image: mongo:7
+    container_name: observability-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - observability_mongodb_data:/data/db
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: observability-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  observability_mongodb_data:
+```
+
+O MongoDB será usado pela API de pedidos.
+
+O Prometheus vai coletar as métricas expostas pela aplicação.
+
+O endereço `host.docker.internal` permite que o container do Prometheus acesse a aplicação rodando na máquina local. No Docker Desktop isso costuma funcionar automaticamente. No Linux, a linha `extra_hosts` ajuda o Docker a resolver esse nome.
+
+### 5. Criar a configuração do Prometheus
+
+Na raiz do projeto, crie o arquivo `prometheus.yml`:
+
+```yaml
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: observability-api
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:8080
+```
+
+O Prometheus trabalha com coleta periódica.
+
+A cada cinco segundos, ele chama:
+
+```text
+http://host.docker.internal:8080/actuator/prometheus
+```
+
+Esse endpoint é gerado pelo Spring Boot Actuator junto com o Micrometer.
+
+### 6. Subir MongoDB e Prometheus
+
+Execute:
+
+```bash
+docker compose up -d
+```
+
+Verifique se os containers subiram:
+
+```bash
+docker compose ps
+```
+
+Se precisar ver logs:
+
+```bash
+docker compose logs mongodb
+docker compose logs prometheus
+```
+
+### 7. Criar o model Order
+
+Crie o arquivo `src/main/java/br/edu/upf/observabilityapi/model/Order.java`:
+
+```java
+package br.edu.upf.observabilityapi.model;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Document(collection = "orders")
+public class Order {
+
+    @Id
+    private String id;
+
+    private String customerName;
+    private String customerEmail;
+    private BigDecimal total;
+    private LocalDateTime createdAt;
 }
 ```
 
-**Solução: Interceptor Global**
+`@Document` indica que essa classe representa um documento no MongoDB.
 
-- Logging automático de todas as requisições
-- Medição de tempo de resposta
-- Contexto automático (método HTTP, URL)
-- Não precisa modificar cada controller
+`@Id` marca o campo usado como identificador.
 
-### 3.2 Criar LoggingInterceptor
+O Lombok reduz código repetitivo. Sem ele, precisaríamos escrever getters, setters, construtores e builder manualmente.
 
-Criar arquivo `src/common/interceptors/logging.interceptor.ts`:
+### 8. Criar os DTOs
 
-```bash
-# Criar arquivo
-touch src/common/interceptors/logging.interceptor.ts
-```
+Crie o arquivo `src/main/java/br/edu/upf/observabilityapi/dto/CreateOrderRequest.java`:
 
-Editar o arquivo:
+```java
+package br.edu.upf.observabilityapi.dto;
 
-```typescript
-import {
-  Injectable,
-  NestInterceptor,
-  ExecutionContext,
-  CallHandler,
-} from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
-import { MyLoggerService } from '../logger/my-logger.service';
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
+import lombok.Builder;
 
-/**
- * Logging Interceptor
- * 
- * O que faz:
- * - Registra automaticamente todas as requisições HTTP
- * - Mede o tempo de resposta
- * - Adiciona contexto (método, URL, status code)
- * 
- * Por que usar:
- * - Não precisa adicionar logs manualmente em cada endpoint
- * - Visibilidade automática de todas as requisições
- * - Identifica endpoints lentos facilmente
- * 
- * Como funciona:
- * 1. Intercepta requisição antes de processar
- * 2. Registra início da requisição
- * 3. Processa requisição
- * 4. Mede tempo decorrido
- * 5. Registra fim da requisição com tempo
- */
-@Injectable()
-export class LoggingInterceptor implements NestInterceptor {
-  constructor(private readonly logger: MyLoggerService) {
-    // Define contexto do logger
-    this.logger.setContext('HTTP');
-  }
+@Builder
+public record CreateOrderRequest(
+        @NotBlank(message = "O nome do cliente é obrigatório")
+        String customerName,
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
-    // Obtém informações da requisição HTTP
-    const request = context.switchToHttp().getRequest();
-    const { method, url } = request;
-    const now = Date.now();
+        @NotBlank(message = "O email do cliente é obrigatório")
+        @Email(message = "O email do cliente deve ser válido")
+        String customerEmail,
 
-    // Registra início da requisição
-    this.logger.log(`→ ${method} ${url}`, 'HTTP');
-
-    // Processa requisição e mede tempo
-    return next.handle().pipe(
-      tap({
-        // Quando requisição é bem-sucedida
-        next: () => {
-          const response = context.switchToHttp().getResponse();
-          const { statusCode } = response;
-          const time = Date.now() - now;
-          
-          this.logger.log(
-            `← ${method} ${url} ${statusCode} - ${time}ms`,
-            'HTTP',
-          );
-        },
-        // Quando requisição falha
-        error: (error) => {
-          const time = Date.now() - now;
-          const statusCode = error.status || 500;
-          
-          this.logger.error(
-            `${method} ${url} ${statusCode} - ${time}ms - ${error.message}`,
-            error.stack,
-            'HTTP',
-          );
-        },
-      }),
-    );
-  }
+        @NotNull(message = "O total do pedido é obrigatório")
+        @DecimalMin(value = "0.01", message = "O total do pedido deve ser maior que zero")
+        BigDecimal total
+) {
 }
 ```
 
-**Explicação:**
+Esse DTO representa os dados que entram na API.
 
-- `NestInterceptor`: Interface do NestJS para interceptors
-- `intercept()`: Método chamado para cada requisição
-- `next.handle()`: Continua processamento da requisição
-- `tap()`: Operador RxJS que executa código sem modificar o fluxo
-- Medição de tempo: `Date.now()` antes e depois
+As anotações de validação protegem o controller contra dados inválidos. O controller recebe o corpo da requisição e o Spring valida antes de chamar o service.
 
-**Exemplo de saída:**
-```
-[HTTP] → GET /api/payments
-[HTTP] ← GET /api/payments 200 - 45ms
-```
+Agora crie `src/main/java/br/edu/upf/observabilityapi/dto/OrderResponse.java`:
 
-### 3.3 Registrar Logger e Interceptor no AppModule
+```java
+package br.edu.upf.observabilityapi.dto;
 
-Agora que criamos tanto o Logger quanto o Interceptor, vamos registrá-los no `AppModule`:
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import lombok.Builder;
 
-Editar `src/app.module.ts`:
-
-```typescript
-import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { MyLoggerService } from './common/logger/my-logger.service';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
-
-@Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [
-    AppService,
-    // Registrar logger como provider global
-    {
-      provide: MyLoggerService,
-      useValue: new MyLoggerService(),
-    },
-    // Registrar interceptor global
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: LoggingInterceptor,
-    },
-  ],
-})
-export class AppModule {}
-```
-
-**Explicação:**
-
-- `MyLoggerService`: Provider global para usar o logger em qualquer lugar da aplicação
-- `APP_INTERCEPTOR`: Token especial do NestJS para registrar interceptors globalmente
-- `LoggingInterceptor`: Interceptor que será aplicado automaticamente a todas as requisições HTTP
-
-## Passo 4: Implementar Health Check
-
-### 4.1 Por que Health Check?
-
-**Problema:** Como saber se a aplicação está funcionando corretamente?
-
-**Solução: Health Check**
-
-- Endpoint `/health` que verifica saúde da aplicação
-- Verifica dependências (banco de dados, APIs externas)
-- Usado por orquestradores (Kubernetes, Docker Swarm)
-- Monitoramento automático
-
-### 4.2 Criar Health Module
-
-```bash
-# Criar módulo e controller usando NestJS CLI
-nest g module health
-nest g controller health
-```
-
-**Ou criar manualmente:**
-
-```bash
-# Criar arquivos manualmente
-touch src/health/health.module.ts
-touch src/health/health.controller.ts
-```
-
-### 4.3 Implementar Health Controller
-
-Editar `src/health/health.controller.ts`:
-
-```typescript
-import { Controller, Get } from '@nestjs/common';
-import {
-  HealthCheckService,
-  HealthCheck,
-  MemoryHealthIndicator,
-  DiskHealthIndicator,
-} from '@nestjs/terminus';
-import { MyLoggerService } from '../common/logger/my-logger.service';
-
-/**
- * Health Check Controller
- * 
- * O que faz:
- * - Fornece endpoint /health para verificar saúde da aplicação
- * - Verifica memória, disco, banco de dados
- * - Usado por orquestradores (Kubernetes) para verificar se app está saudável
- * 
- * Endpoints:
- * - GET /health → Verifica saúde geral
- * - GET /health/live → Verifica se aplicação está rodando (liveness)
- * - GET /health/ready → Verifica se aplicação está pronta (readiness)
- */
-@Controller('health')
-export class HealthController {
-  constructor(
-    private health: HealthCheckService,
-    private memory: MemoryHealthIndicator,
-    private disk: DiskHealthIndicator,
-    private logger: MyLoggerService,
-  ) {
-    this.logger.setContext('HealthCheck');
-  }
-
-  /**
-   * Health check completo
-   * Verifica memória, disco e outras dependências
-   */
-  @Get()
-  @HealthCheck()
-  check() {
-    this.logger.log('Health check executado', 'HealthCheck');
-    
-    return this.health.check([
-      // Verifica uso de memória (alerta se acima de 300MB)
-      () => this.memory.checkHeap('memory_heap', 300 * 1024 * 1024),
-      
-      // Verifica uso de memória RSS (alerta se acima de 300MB)
-      () => this.memory.checkRSS('memory_rss', 300 * 1024 * 1024),
-      
-      // Verifica espaço em disco (alerta se acima de 90%)
-      () =>
-        this.disk.checkStorage('storage', {
-          path: '/',
-          thresholdPercent: 0.9,
-        }),
-    ]);
-  }
-
-  /**
-   * Liveness probe
-   * Verifica se aplicação está viva (rodando)
-   * Kubernetes usa isso para reiniciar containers
-   */
-  @Get('live')
-  @HealthCheck()
-  liveness() {
-    return this.health.check([
-      () => ({
-        app: {
-          status: 'up',
-        },
-      }),
-    ]);
-  }
-
-  /**
-   * Readiness probe
-   * Verifica se aplicação está pronta para receber tráfego
-   * Kubernetes usa isso para rotear tráfego
-   */
-  @Get('ready')
-  @HealthCheck()
-  readiness() {
-    return this.health.check([
-      () => ({
-        app: {
-          status: 'up',
-        },
-      }),
-    ]);
-  }
+@Builder
+public record OrderResponse(
+        String id,
+        String customerName,
+        String customerEmail,
+        BigDecimal total,
+        LocalDateTime createdAt
+) {
 }
 ```
 
-### 4.4 Configurar Health Module
+Esse DTO representa os dados que saem da API.
 
-Editar `src/health/health.module.ts`:
+Mesmo que o model seja parecido, não é uma boa prática expor automaticamente tudo que está no documento do MongoDB. O DTO de resposta deixa claro o contrato da API.
 
-```typescript
-import { Module } from '@nestjs/common';
-import { TerminusModule } from '@nestjs/terminus';
-import { HealthController } from './health.controller';
-import { MyLoggerService } from '../common/logger/my-logger.service';
+### 9. Criar o mapper
 
-@Module({
-  imports: [TerminusModule],
-  controllers: [HealthController],
-  providers: [MyLoggerService],
-})
-export class HealthModule {}
+Crie o arquivo `src/main/java/br/edu/upf/observabilityapi/mapper/OrderMapper.java`:
+
+```java
+package br.edu.upf.observabilityapi.mapper;
+
+import br.edu.upf.observabilityapi.dto.OrderResponse;
+import br.edu.upf.observabilityapi.model.Order;
+
+public final class OrderMapper {
+
+    private OrderMapper() {
+    }
+
+    public static OrderResponse mapFrom(Order order) {
+        if (order == null) {
+            return null;
+        }
+
+        return OrderResponse.builder()
+                .id(order.getId())
+                .customerName(order.getCustomerName())
+                .customerEmail(order.getCustomerEmail())
+                .total(order.getTotal())
+                .createdAt(order.getCreatedAt())
+                .build();
+    }
+}
 ```
 
-### 4.5 Registrar Health Module
+O mapper separa a conversão entre model e DTO.
 
-Editar `src/app.module.ts`:
+Essa conversão não deve ficar no controller. O controller precisa cuidar da entrada HTTP e da resposta HTTP. Ele não deve carregar detalhes de transformação de objetos.
 
-```typescript
-import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { MyLoggerService } from './common/logger/my-logger.service';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
-import { HealthModule } from './health/health.module';
+### 10. Criar o repository
 
-@Module({
-  imports: [
-    HealthModule, // Adicionar health module
-  ],
-  controllers: [AppController],
-  providers: [
-    AppService,
-    {
-      provide: MyLoggerService,
-      useValue: new MyLoggerService(),
-    },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: LoggingInterceptor,
-    },
-  ],
-})
-export class AppModule {}
+Crie o arquivo `src/main/java/br/edu/upf/observabilityapi/repository/OrderRepository.java`:
+
+```java
+package br.edu.upf.observabilityapi.repository;
+
+import br.edu.upf.observabilityapi.model.Order;
+import org.springframework.data.mongodb.repository.MongoRepository;
+
+public interface OrderRepository extends MongoRepository<Order, String> {
+}
 ```
 
-### 4.6 Testar Health Check
+O `MongoRepository` já entrega operações como salvar, listar e buscar por id.
+
+Por baixo dos panos, o Spring Data cria a implementação em tempo de execução. Por isso, aqui declaramos uma interface e não uma classe concreta.
+
+### 11. Criar o service com logs
+
+Crie o arquivo `src/main/java/br/edu/upf/observabilityapi/service/OrderService.java`:
+
+```java
+package br.edu.upf.observabilityapi.service;
+
+import br.edu.upf.observabilityapi.dto.CreateOrderRequest;
+import br.edu.upf.observabilityapi.dto.OrderResponse;
+import br.edu.upf.observabilityapi.mapper.OrderMapper;
+import br.edu.upf.observabilityapi.model.Order;
+import br.edu.upf.observabilityapi.repository.OrderRepository;
+import java.time.LocalDateTime;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+@Service
+@RequiredArgsConstructor
+public class OrderService {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+
+    private final OrderRepository orderRepository;
+
+    public OrderResponse create(CreateOrderRequest request) {
+        log.info("Criando pedido para o cliente {}", request.customerEmail());
+
+        Order order = Order.builder()
+                .customerName(request.customerName())
+                .customerEmail(request.customerEmail())
+                .total(request.total())
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        Order savedOrder = orderRepository.save(order);
+
+        log.info("Pedido criado com sucesso. orderId={}", savedOrder.getId());
+
+        return OrderMapper.mapFrom(savedOrder);
+    }
+
+    public List<OrderResponse> findAll() {
+        log.info("Listando pedidos");
+
+        return orderRepository.findAll()
+                .stream()
+                .map(OrderMapper::mapFrom)
+                .toList();
+    }
+
+    public OrderResponse findById(String id) {
+        log.info("Buscando pedido por id. orderId={}", id);
+
+        return orderRepository.findById(id)
+                .map(OrderMapper::mapFrom)
+                .orElseThrow(() -> {
+                    log.warn("Pedido não encontrado. orderId={}", id);
+                    return new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido não encontrado");
+                });
+    }
+}
+```
+
+Aqui aparece o primeiro ponto prático de observabilidade: logs úteis.
+
+O service registra quando uma operação importante começa, quando termina e quando algo esperado não acontece, como buscar um pedido inexistente.
+
+Observe que não registramos tudo. Não faz sentido criar log para cada linha. O log precisa ajudar a investigar.
+
+Também evitamos registrar dados sensíveis. O email aparece aqui por ser didático e simples, mas em sistemas reais é preciso avaliar privacidade e regras da empresa.
+
+### 12. Criar o controller
+
+Crie o arquivo `src/main/java/br/edu/upf/observabilityapi/controller/OrderController.java`:
+
+```java
+package br.edu.upf.observabilityapi.controller;
+
+import br.edu.upf.observabilityapi.dto.CreateOrderRequest;
+import br.edu.upf.observabilityapi.dto.OrderResponse;
+import br.edu.upf.observabilityapi.service.OrderService;
+import jakarta.validation.Valid;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/v1/orders")
+@RequiredArgsConstructor
+public class OrderController {
+
+    private final OrderService orderService;
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public OrderResponse create(@Valid @RequestBody CreateOrderRequest request) {
+        return orderService.create(request);
+    }
+
+    @GetMapping
+    public List<OrderResponse> findAll() {
+        return orderService.findAll();
+    }
+
+    @GetMapping("/{id}")
+    public OrderResponse findById(@PathVariable String id) {
+        return orderService.findById(id);
+    }
+}
+```
+
+O controller está fino.
+
+Ele recebe HTTP, valida o corpo da requisição com `@Valid`, delega para o service e devolve a resposta.
+
+Ele não acessa repository, não monta objeto manualmente e não coloca regra de negócio no endpoint.
+
+### 13. Conferir a classe principal
+
+O Spring Initializr já cria a classe principal. Confira se ela está assim em `src/main/java/br/edu/upf/observabilityapi/ObservabilityApiApplication.java`:
+
+```java
+package br.edu.upf.observabilityapi;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class ObservabilityApiApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(ObservabilityApiApplication.class, args);
+    }
+}
+```
+
+`@SpringBootApplication` habilita a configuração automática do Spring Boot e a varredura dos componentes do projeto.
+
+Por isso o Spring encontra o controller, o service e o repository sem precisarmos registrar cada classe manualmente.
+
+### 14. Rodar a aplicação
+
+No Linux:
 
 ```bash
-# Iniciar aplicação
-npm run start:dev
-
-# Testar health check
-curl http://localhost:3001/health
+./gradlew bootRun
 ```
 
-**Resposta esperada:**
+No Windows:
+
+```bash
+gradlew.bat bootRun
+```
+
+Quando a aplicação subir, acesse:
+
+```text
+http://localhost:8080/swagger-ui.html
+```
+
+Agora a API já está pronta para receber pedidos.
+
+### 15. Criar pedidos para gerar comportamento
+
+Crie um pedido:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -d '{"customerName":"Ana Souza","customerEmail":"ana@email.com","total":149.90}'
+```
+
+Liste os pedidos:
+
+```bash
+curl http://localhost:8080/api/v1/orders
+```
+
+Busque um pedido por id:
+
+```bash
+curl http://localhost:8080/api/v1/orders/ID_DO_PEDIDO
+```
+
+Também faça uma chamada com erro para gerar métrica de `404`:
+
+```bash
+curl -i http://localhost:8080/api/v1/orders/id-inexistente
+```
+
+Essas chamadas são importantes porque métricas não aparecem do nada. A aplicação precisa receber tráfego para gerar dados.
+
+### 16. Verificar o health check
+
+Acesse:
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+A resposta deve indicar que a aplicação está `UP`.
+
+Como usamos Spring Data MongoDB, o Actuator também consegue verificar a conexão com o MongoDB.
+
+Uma resposta saudável fica parecida com isto:
+
 ```json
 {
-  "status": "ok",
-  "info": {
-    "memory_heap": { "status": "up" },
-    "memory_rss": { "status": "up" },
-    "storage": { "status": "up" }
-  },
-  "error": {},
-  "details": {
-    "memory_heap": { "status": "up" },
-    "memory_rss": { "status": "up" },
-    "storage": { "status": "up" }
-  }
-}
-```
-
-## Passo 5: Implementar Métricas Prometheus
-
-### 5.1 Por que Prometheus?
-
-**Problema:** Como coletar métricas da aplicação?
-
-**Solução: Prometheus**
-
-- Padrão de mercado para métricas
-- Formato exposto em `/metrics`
-- Coletado por Prometheus server
-- Visualizado em Grafana
-
-### 5.2 Criar Metrics Module
-
-```bash
-# Criar módulo e controller usando NestJS CLI
-nest g module metrics
-nest g controller metrics
-nest g service metrics
-```
-
-**Ou criar manualmente:**
-
-```bash
-# Criar arquivos manualmente
-touch src/metrics/metrics.module.ts
-touch src/metrics/metrics.controller.ts
-touch src/metrics/metrics.service.ts
-```
-
-### 5.3 Implementar Metrics Service
-
-Criar arquivo `src/metrics/metrics.service.ts`:
-
-```typescript
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import { Registry, Counter, Histogram, collectDefaultMetrics } from 'prom-client';
-import { MyLoggerService } from '../common/logger/my-logger.service';
-
-/**
- * Metrics Service
- * 
- * O que faz:
- * - Expõe métricas no formato Prometheus
- * - Coleta métricas padrão (CPU, memória, etc)
- * - Permite criar métricas customizadas
- * 
- * Métricas expostas:
- * - http_requests_total: Total de requisições HTTP
- * - http_request_duration_seconds: Duração das requisições
- * - Métricas padrão do Node.js (CPU, memória, etc)
- */
-@Injectable()
-export class MetricsService implements OnModuleInit {
-  private readonly registry: Registry;
-  public readonly httpRequestCounter: Counter;
-  public readonly httpRequestDuration: Histogram;
-
-  constructor(private readonly logger: MyLoggerService) {
-    this.logger.setContext('Metrics');
-    
-    // Criar registry para métricas
-    this.registry = new Registry();
-    
-    // Coletar métricas padrão do Node.js
-    collectDefaultMetrics({ register: this.registry });
-
-    // Contador de requisições HTTP
-    this.httpRequestCounter = new Counter({
-      name: 'http_requests_total',
-      help: 'Total de requisições HTTP',
-      labelNames: ['method', 'route', 'status'],
-      registers: [this.registry],
-    });
-
-    // Histograma de duração de requisições
-    this.httpRequestDuration = new Histogram({
-      name: 'http_request_duration_seconds',
-      help: 'Duração das requisições HTTP em segundos',
-      labelNames: ['method', 'route'],
-      buckets: [0.1, 0.5, 1, 2, 5], // Buckets para percentis
-      registers: [this.registry],
-    });
-  }
-
-  onModuleInit() {
-    this.logger.log('Métricas Prometheus inicializadas', 'Metrics');
-  }
-
-  /**
-   * Retorna métricas no formato Prometheus
-   */
-  async getMetrics(): Promise<string> {
-    return this.registry.metrics();
-  }
-}
-```
-
-### 5.4 Implementar Metrics Controller
-
-Editar `src/metrics/metrics.controller.ts`:
-
-```typescript
-import { Controller, Get, Header } from '@nestjs/common';
-import { MetricsService } from './metrics.service';
-
-/**
- * Metrics Controller
- * 
- * Endpoint: GET /metrics
- * 
- * Retorna métricas no formato Prometheus
- * Prometheus server coleta essas métricas periodicamente
- */
-@Controller('metrics')
-export class MetricsController {
-  constructor(private readonly metricsService: MetricsService) {}
-
-  @Get()
-  @Header('Content-Type', 'text/plain')
-  async getMetrics() {
-    return this.metricsService.getMetrics();
-  }
-}
-```
-
-### 5.5 Configurar Metrics Module
-
-Editar `src/metrics/metrics.module.ts`:
-
-```typescript
-import { Module } from '@nestjs/common';
-import { MetricsController } from './metrics.controller';
-import { MetricsService } from './metrics.service';
-import { MyLoggerService } from '../common/logger/my-logger.service';
-
-@Module({
-  controllers: [MetricsController],
-  providers: [MetricsService, MyLoggerService],
-  exports: [MetricsService], // Exportar para usar em outros módulos
-})
-export class MetricsModule {}
-```
-
-### 5.6 Integrar Métricas no Interceptor
-
-Atualizar `src/common/interceptors/logging.interceptor.ts`:
-
-```typescript
-import {
-  Injectable,
-  NestInterceptor,
-  ExecutionContext,
-  CallHandler,
-  Inject,
-  Optional,
-} from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
-import { MyLoggerService } from '../logger/my-logger.service';
-import { MetricsService } from '../../metrics/metrics.service';
-
-@Injectable()
-export class LoggingInterceptor implements NestInterceptor {
-  constructor(
-    private readonly logger: MyLoggerService,
-    @Optional() @Inject(MetricsService) private readonly metrics?: MetricsService, // Injetar metrics service (opcional)
-  ) {
-    this.logger.setContext('HTTP');
-  }
-
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
-    const request = context.switchToHttp().getRequest();
-    const { method, url } = request;
-    const route = url.split('?')[0]; // Remove query params
-    const now = Date.now();
-
-    this.logger.log(`→ ${method} ${url}`, 'HTTP');
-
-    // Iniciar timer para métricas (se metrics service estiver disponível)
-    let timer: (() => number) | null = null;
-    if (this.metrics) {
-      timer = this.metrics.httpRequestDuration.startTimer({
-        method,
-        route,
-      });
-    }
-
-    return next.handle().pipe(
-      tap({
-        next: (data) => {
-          const response = context.switchToHttp().getResponse();
-          const { statusCode } = response;
-          const time = Date.now() - now;
-
-          // Registrar métricas (se disponível)
-          if (this.metrics) {
-            this.metrics.httpRequestCounter.inc({
-              method,
-              route,
-              status: statusCode,
-            });
-            if (timer) timer(); // Finalizar timer
-          }
-
-          this.logger.log(
-            `← ${method} ${url} ${statusCode} - ${time}ms`,
-            'HTTP',
-          );
-        },
-        error: (error) => {
-          const time = Date.now() - now;
-          const statusCode = error.status || 500;
-          
-          // Registrar métricas de erro (se disponível)
-          if (this.metrics) {
-            if (timer) timer(); // Finalizar timer mesmo em caso de erro
-            this.metrics.httpRequestCounter.inc({
-              method,
-              route,
-              status: statusCode,
-            });
-          }
-
-          this.logger.error(
-            `${method} ${url} ${statusCode} - ${time}ms - ${error.message}`,
-            error.stack,
-            'HTTP',
-          );
-        },
-      }),
-    );
-  }
-}
-```
-
-### 5.7 Atualizar App Module
-
-Editar `src/app.module.ts`:
-
-```typescript
-import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { MyLoggerService } from './common/logger/my-logger.service';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
-import { HealthModule } from './health/health.module';
-import { MetricsModule } from './metrics/metrics.module';
-
-@Module({
-  imports: [
-    HealthModule,
-    MetricsModule, // Adicionar metrics module
-  ],
-  controllers: [AppController],
-  providers: [
-    AppService,
-    {
-      provide: MyLoggerService,
-      useValue: new MyLoggerService(),
+  "status": "UP",
+  "components": {
+    "mongo": {
+      "status": "UP"
     },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: LoggingInterceptor,
-    },
-  ],
-})
-export class AppModule {}
-```
-
-### 5.8 Testar Métricas
-
-```bash
-# Fazer algumas requisições
-curl http://localhost:3001/api/payments
-curl http://localhost:3001/health
-
-# Ver métricas
-curl http://localhost:3001/metrics
-```
-
-**Exemplo de saída:**
-```
-# HELP http_requests_total Total de requisições HTTP
-# TYPE http_requests_total counter
-http_requests_total{method="GET",route="/api/payments",status="200"} 1
-
-# HELP http_request_duration_seconds Duração das requisições HTTP em segundos
-# TYPE http_request_duration_seconds histogram
-http_request_duration_seconds_bucket{method="GET",route="/api/payments",le="0.1"} 1
-http_request_duration_seconds_bucket{method="GET",route="/api/payments",le="0.5"} 1
-```
-
-## Passo 6: Usar Logger nos Services
-
-### 6.1 Exemplo: Usar Logger em um Service
-
-Vamos criar um exemplo simples para demonstrar o uso do logger. Editar `src/app.service.ts`:
-
-```typescript
-import { Injectable } from '@nestjs/common';
-import { MyLoggerService } from './common/logger/my-logger.service';
-
-@Injectable()
-export class AppService {
-  constructor(private readonly logger: MyLoggerService) {
-    // Define contexto do logger
-    this.logger.setContext('AppService');
-  }
-
-  getHello(): string {
-    this.logger.log('Método getHello() chamado', 'AppService');
-    return 'Hello World!';
-  }
-
-  exemploComErro() {
-    try {
-      this.logger.log('Tentando executar operação...', 'AppService');
-      // Simular erro
-      throw new Error('Erro de exemplo');
-    } catch (error) {
-      this.logger.error(
-        `Erro ao executar operação: ${error.message}`,
-        error.stack,
-      );
-      throw error;
+    "ping": {
+      "status": "UP"
     }
   }
 }
 ```
 
-**Explicação:**
+Se o MongoDB estiver parado, esse endpoint ajuda a enxergar o problema rapidamente.
 
-- `setContext()`: Define contexto do logger (aparece nos logs)
-- `log()`: Registra informações normais
-- `error()`: Registra erros com stack trace
+Esse é o papel do health check: mostrar se a aplicação está em condição de funcionar.
 
-## Passo 7: Remover console.log do main.ts
+### 17. Verificar métricas pelo Actuator
 
-### 7.1 Atualizar main.ts
+Veja a lista de métricas disponíveis:
 
-Editar `src/main.ts`:
+```bash
+curl http://localhost:8080/actuator/metrics
+```
 
-```typescript
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { MyLoggerService } from './common/logger/my-logger.service';
+Você verá nomes como:
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    // Usar logger customizado
-    logger: new MyLoggerService(),
-  });
+```text
+http.server.requests
+jvm.memory.used
+process.cpu.usage
+application.started.time
+```
 
-  // Habilitar CORS (opcional)
-  app.enableCors();
+Agora consulte a métrica de requisições HTTP:
 
-  // Usar logger ao invés de console.log
-  const logger = app.get(MyLoggerService);
-  logger.setContext('Bootstrap');
-  
-  const port = process.env.PORT || 3000;
-  
-  logger.log(`API iniciada na porta ${port}`);
-  logger.log(`Health check disponível em: http://localhost:${port}/health`);
-  logger.log(`Métricas disponíveis em: http://localhost:${port}/metrics`);
+```bash
+curl http://localhost:8080/actuator/metrics/http.server.requests
+```
 
-  await app.listen(port);
+Essa métrica mostra informações sobre chamadas HTTP recebidas pela aplicação.
+
+O Spring Boot coleta isso automaticamente porque estamos usando Spring Web, Actuator e Micrometer.
+
+### 18. Verificar o endpoint Prometheus
+
+Acesse:
+
+```bash
+curl http://localhost:8080/actuator/prometheus
+```
+
+A resposta vem em texto puro, no formato esperado pelo Prometheus.
+
+Procure por métricas HTTP:
+
+```bash
+curl http://localhost:8080/actuator/prometheus | grep http_server_requests
+```
+
+No Windows PowerShell, use:
+
+```bash
+curl http://localhost:8080/actuator/prometheus
+```
+
+Depois procure pelo texto `http_server_requests` na saída.
+
+O ponto importante é entender que `/actuator/metrics` é bom para inspecionar métricas pelo próprio Actuator, enquanto `/actuator/prometheus` existe para ferramentas externas coletarem os dados.
+
+### 19. Abrir o Prometheus
+
+Acesse no navegador:
+
+```text
+http://localhost:9090
+```
+
+Na tela do Prometheus, pesquise por:
+
+```text
+http_server_requests_seconds_count
+```
+
+Essa métrica indica a quantidade de requisições HTTP registradas.
+
+Pesquise também:
+
+```text
+jvm_memory_used_bytes
+```
+
+Essa métrica mostra uso de memória da JVM.
+
+Se a aplicação estiver rodando e o Prometheus estiver conseguindo coletar, essas métricas aparecem na interface.
+
+### 20. Conferir se o Prometheus está coletando
+
+No Prometheus, acesse:
+
+```text
+Status -> Targets
+```
+
+O target `observability-api` deve aparecer como `UP`.
+
+Se aparecer como `DOWN`, verifique:
+
+* se a API está rodando na porta `8080`;
+* se o endpoint `/actuator/prometheus` responde no navegador;
+* se o arquivo `prometheus.yml` está na raiz do projeto;
+* se o Docker Compose foi iniciado depois da criação do arquivo;
+* se o Docker consegue resolver `host.docker.internal`.
+
+### 21. Observar os logs
+
+Com a aplicação rodando, faça algumas chamadas para a API.
+
+No terminal onde o `bootRun` está executando, você verá mensagens geradas pelo service.
+
+Elas ajudam a entender o que aconteceu:
+
+```text
+Criando pedido para o cliente ana@email.com
+Pedido criado com sucesso. orderId=...
+Listando pedidos
+Buscando pedido por id. orderId=...
+Pedido não encontrado. orderId=id-inexistente
+```
+
+Esses logs são simples, mas já mostram uma boa prática: registrar eventos relevantes com contexto.
+
+O log não substitui métrica. A métrica mostra o padrão geral. O log ajuda a investigar um caso específico.
+
+## Código completo
+
+### build.gradle
+
+```groovy
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.5.14'
+    id 'io.spring.dependency-management' version '1.1.7'
 }
-bootstrap();
+
+group = 'br.edu.upf'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.14'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
 ```
 
-## Passo 8: Testar Observabilidade Completa
+### application.properties
 
-### 8.1 Iniciar Aplicação
+```properties
+spring.application.name=observability-api
+server.port=${PORT:8080}
+
+spring.data.mongodb.uri=${MONGODB_URI:mongodb://localhost:27017/observability_api}
+
+springdoc.swagger-ui.path=/swagger-ui.html
+
+management.endpoints.web.exposure.include=health,info,metrics,prometheus
+management.endpoint.health.show-details=always
+management.metrics.tags.application=${spring.application.name}
+```
+
+### docker-compose.yml
+
+```yaml
+services:
+  mongodb:
+    image: mongo:7
+    container_name: observability-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - observability_mongodb_data:/data/db
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: observability-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  observability_mongodb_data:
+```
+
+### prometheus.yml
+
+```yaml
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: observability-api
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:8080
+```
+
+### ObservabilityApiApplication.java
+
+```java
+package br.edu.upf.observabilityapi;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class ObservabilityApiApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(ObservabilityApiApplication.class, args);
+    }
+}
+```
+
+### Order.java
+
+```java
+package br.edu.upf.observabilityapi.model;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Document(collection = "orders")
+public class Order {
+
+    @Id
+    private String id;
+
+    private String customerName;
+    private String customerEmail;
+    private BigDecimal total;
+    private LocalDateTime createdAt;
+}
+```
+
+### CreateOrderRequest.java
+
+```java
+package br.edu.upf.observabilityapi.dto;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
+import lombok.Builder;
+
+@Builder
+public record CreateOrderRequest(
+        @NotBlank(message = "O nome do cliente é obrigatório")
+        String customerName,
+
+        @NotBlank(message = "O email do cliente é obrigatório")
+        @Email(message = "O email do cliente deve ser válido")
+        String customerEmail,
+
+        @NotNull(message = "O total do pedido é obrigatório")
+        @DecimalMin(value = "0.01", message = "O total do pedido deve ser maior que zero")
+        BigDecimal total
+) {
+}
+```
+
+### OrderResponse.java
+
+```java
+package br.edu.upf.observabilityapi.dto;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import lombok.Builder;
+
+@Builder
+public record OrderResponse(
+        String id,
+        String customerName,
+        String customerEmail,
+        BigDecimal total,
+        LocalDateTime createdAt
+) {
+}
+```
+
+### OrderMapper.java
+
+```java
+package br.edu.upf.observabilityapi.mapper;
+
+import br.edu.upf.observabilityapi.dto.OrderResponse;
+import br.edu.upf.observabilityapi.model.Order;
+
+public final class OrderMapper {
+
+    private OrderMapper() {
+    }
+
+    public static OrderResponse mapFrom(Order order) {
+        if (order == null) {
+            return null;
+        }
+
+        return OrderResponse.builder()
+                .id(order.getId())
+                .customerName(order.getCustomerName())
+                .customerEmail(order.getCustomerEmail())
+                .total(order.getTotal())
+                .createdAt(order.getCreatedAt())
+                .build();
+    }
+}
+```
+
+### OrderRepository.java
+
+```java
+package br.edu.upf.observabilityapi.repository;
+
+import br.edu.upf.observabilityapi.model.Order;
+import org.springframework.data.mongodb.repository.MongoRepository;
+
+public interface OrderRepository extends MongoRepository<Order, String> {
+}
+```
+
+### OrderService.java
+
+```java
+package br.edu.upf.observabilityapi.service;
+
+import br.edu.upf.observabilityapi.dto.CreateOrderRequest;
+import br.edu.upf.observabilityapi.dto.OrderResponse;
+import br.edu.upf.observabilityapi.mapper.OrderMapper;
+import br.edu.upf.observabilityapi.model.Order;
+import br.edu.upf.observabilityapi.repository.OrderRepository;
+import java.time.LocalDateTime;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+@Service
+@RequiredArgsConstructor
+public class OrderService {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+
+    private final OrderRepository orderRepository;
+
+    public OrderResponse create(CreateOrderRequest request) {
+        log.info("Criando pedido para o cliente {}", request.customerEmail());
+
+        Order order = Order.builder()
+                .customerName(request.customerName())
+                .customerEmail(request.customerEmail())
+                .total(request.total())
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        Order savedOrder = orderRepository.save(order);
+
+        log.info("Pedido criado com sucesso. orderId={}", savedOrder.getId());
+
+        return OrderMapper.mapFrom(savedOrder);
+    }
+
+    public List<OrderResponse> findAll() {
+        log.info("Listando pedidos");
+
+        return orderRepository.findAll()
+                .stream()
+                .map(OrderMapper::mapFrom)
+                .toList();
+    }
+
+    public OrderResponse findById(String id) {
+        log.info("Buscando pedido por id. orderId={}", id);
+
+        return orderRepository.findById(id)
+                .map(OrderMapper::mapFrom)
+                .orElseThrow(() -> {
+                    log.warn("Pedido não encontrado. orderId={}", id);
+                    return new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido não encontrado");
+                });
+    }
+}
+```
+
+### OrderController.java
+
+```java
+package br.edu.upf.observabilityapi.controller;
+
+import br.edu.upf.observabilityapi.dto.CreateOrderRequest;
+import br.edu.upf.observabilityapi.dto.OrderResponse;
+import br.edu.upf.observabilityapi.service.OrderService;
+import jakarta.validation.Valid;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/v1/orders")
+@RequiredArgsConstructor
+public class OrderController {
+
+    private final OrderService orderService;
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public OrderResponse create(@Valid @RequestBody CreateOrderRequest request) {
+        return orderService.create(request);
+    }
+
+    @GetMapping
+    public List<OrderResponse> findAll() {
+        return orderService.findAll();
+    }
+
+    @GetMapping("/{id}")
+    public OrderResponse findById(@PathVariable String id) {
+        return orderService.findById(id);
+    }
+}
+```
+
+## Erros comuns
+
+### Esquecer a dependência do Prometheus
+
+Sem `micrometer-registry-prometheus`, o endpoint `/actuator/prometheus` não aparece.
+
+O Actuator cria endpoints operacionais, mas o formato Prometheus depende do registry específico.
+
+### A aplicação sobe, mas o health check do MongoDB fica DOWN
+
+Isso normalmente significa que o MongoDB não está rodando ou que a URI está errada.
+
+Confira se o container está ativo:
 
 ```bash
-npm run start:dev
+docker compose ps
 ```
 
-### 8.2 Fazer Requisições
+Depois confira a configuração:
+
+```properties
+spring.data.mongodb.uri=${MONGODB_URI:mongodb://localhost:27017/observability_api}
+```
+
+### Prometheus mostra o target como DOWN
+
+Primeiro teste o endpoint diretamente:
 
 ```bash
-# Health check
-curl http://localhost:3000/health
-
-# Endpoint padrão
-curl http://localhost:3000
-
-# Ver métricas
-curl http://localhost:3000/metrics
+curl http://localhost:8080/actuator/prometheus
 ```
 
-### 8.3 Verificar Logs
+Se esse endpoint não responder, o problema está na aplicação ou na configuração do Actuator.
 
-**Saída esperada no console:**
-```
-[HTTP] → GET /health
-[HealthCheck] Health check executado
-[HTTP] ← GET /health 200 - 12ms
+Se ele responder no navegador, mas o Prometheus continuar `DOWN`, revise o `prometheus.yml` e reinicie o Docker Compose.
 
-[HTTP] → GET /
-[AppService] Método getHello() chamado
-[HTTP] ← GET / 200 - 5ms
-```
+### Esperar métricas sem gerar requisições
 
-### 8.4 Verificar Métricas
+Algumas métricas só aparecem depois que a aplicação executa uma operação.
 
-```bash
-curl http://localhost:3000/metrics | grep http_requests
-```
+Faça chamadas para criar, listar e buscar pedidos antes de procurar métricas HTTP.
 
-**Saída esperada:**
-```
-http_requests_total{method="GET",route="/health",status="200"} 1
-http_requests_total{method="GET",route="/",status="200"} 1
+### Expor endpoints demais do Actuator
+
+Nesta aula expomos apenas:
+
+```properties
+management.endpoints.web.exposure.include=health,info,metrics,prometheus
 ```
 
-## Conclusão
+Evite expor todos os endpoints com `*` sem entender o impacto. Alguns endpoints podem revelar detalhes internos da aplicação.
 
-Este tutorial demonstrou como implementar **observabilidade profissional** em NestJS, seguindo boas práticas e padrões da indústria.
+### Colocar regra de negócio no controller
 
-**Principais Benefícios:**
+O controller não deve salvar diretamente no MongoDB nem montar manualmente a resposta.
 
-- **Visibilidade**: Entenda o que está acontecendo no sistema
-- **Debugging**: Identifique problemas rapidamente
-- **Performance**: Monitore e otimize latência
-- **Confiabilidade**: Detecte problemas antes que afetem usuários
+Neste tutorial, o controller delega para o service. O service coordena a regra. O repository conversa com o banco. O mapper converte model para DTO.
 
-**Lembre-se:**
+## Resumo
 
-> **"Observabilidade não é opcional em sistemas distribuídos. É essencial para entender, diagnosticar e otimizar aplicações em produção."**
+Neste tutorial, criamos uma API Spring Boot simples e adicionamos observabilidade básica.
 
+O Actuator expôs endpoints operacionais, como health check e métricas.
+
+O Micrometer organizou métricas da aplicação.
+
+O Prometheus coletou essas métricas pelo endpoint `/actuator/prometheus`.
+
+Os logs com SLF4J deram contexto para operações importantes da API.
+
+Esse é um começo sólido. Antes de avançar para tracing distribuído e dashboards mais completos, é importante dominar essa base: health, logs e métricas.

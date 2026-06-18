@@ -28,6 +28,7 @@ site_name: UPF APIs - Aulas
 
 nav:
   - Home: index.md
+  - Revisão Aulas 1 a 6: revisao-aulas-1-a-6.md
   - Aula 1 VMs e Containers:
     - Containers vs VMs: aula1/containers-vs-vms.md
     - Docker: aula1/docker.md
@@ -44,6 +45,6 @@ nav:
   - Aula 5 Message Brokers:
     - Message Brokers: aula5/message-brokers.md
     - Tutorial Mensageria: aula5/tutorial-pub-sub.md
-  # - Aula 6 Observabilidade:
-  #   - Observabilidade e Monitoramento: aula6/observability.md
-  #   - Tutorial Observabilidade: aula6/tutorial-observability.md
+  - Aula 6 Observabilidade:
+    - Observabilidade e Monitoramento: aula6/observability.md
+    - Tutorial Observabilidade: aula6/tutorial-observability.md

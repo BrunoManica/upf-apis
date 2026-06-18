@@ -1,474 +1,374 @@
-# Observabilidade e Monitoramento — Os Olhos e Ouvidos do Sistema
+# Observabilidade em APIs e Microsserviços com Spring Boot
 
-## Introdução
+## Objetivo da aula
 
-Em sistemas distribuídos e microsserviços, saber o que está acontecendo dentro do sistema é crucial. **Observabilidade** e **Monitoramento** são dois conceitos fundamentais que nos permitem entender, diagnosticar e otimizar aplicações em produção.
+Nesta aula, vamos entender o que é observabilidade e por que ela se torna tão importante quando uma aplicação deixa de ser um projeto pequeno e passa a funcionar como uma API real.
 
-**O problema:** Quando algo dá errado em produção, como você descobre o que aconteceu? Como você identifica gargalos de performance? Como você previne problemas antes que afetem os usuários?
+A ideia aqui ainda não é configurar ferramentas nem escrever código. Antes disso, faz sentido entender o problema que a observabilidade resolve.
 
-**A solução:** Observabilidade e Monitoramento fornecem visibilidade completa do sistema, permitindo detectar problemas rapidamente, investigar causas raiz e otimizar performance.
+Ao final da aula, você deve conseguir explicar:
 
-## O que é Monitoramento?
+- o que é monitoramento;
+- o que é observabilidade;
+- qual é a diferença entre logs, métricas e traces;
+- por que microsserviços precisam de mais visibilidade do que aplicações simples;
+- onde entram Spring Boot Actuator, Micrometer e Prometheus nesse assunto.
 
-**Monitoramento** é o processo de **coletar dados e gerar relatórios** sobre diferentes métricas que definem a integridade do sistema. É uma abordagem **reativa** e **baseada em métricas conhecidas**.
+## Resultado final
 
-### Analogia: Painel de Carro
+Depois desta aula, você terá uma visão clara do papel da observabilidade em uma aplicação Spring Boot.
 
-Imagine o **painel do seu carro**:
+Você ainda não vai implementar nada aqui. O resultado esperado é conceitual: entender por que uma API precisa expor informações de saúde, registrar eventos importantes, medir comportamento e permitir investigação quando algo dá errado.
 
-- Velocímetro mostra a velocidade atual
-- Medidor de combustível mostra quanto combustível resta
-- Luz de alerta acende quando algo está errado
+Isso prepara o terreno para o tutorial prático, onde a configuração será feita com Spring Boot Actuator, Micrometer e Prometheus.
 
-O monitoramento funciona assim: você define **métricas específicas** para observar (CPU, memória, latência, taxa de erro) e configura **alertas** quando essas métricas ultrapassam limites pré-definidos.
+## Contexto
 
-**Características:**
+Quando estamos começando, é comum testar uma API olhando apenas a resposta no navegador, no Postman ou no terminal. Se a requisição retorna certo, parece que está tudo bem. Se dá erro, olhamos a mensagem e tentamos corrigir.
 
-- Focado em **métricas conhecidas** (CPU, memória, latência)
-- **Reativo**: alerta quando algo já aconteceu
-- Baseado em **limites pré-definidos** (thresholds)
-- Responde à pergunta: **"O que está acontecendo?"**
+Esse jeito funciona enquanto o sistema é pequeno, está rodando na nossa máquina e tem poucas partes envolvidas.
 
-### Exemplos de Monitoramento
+Em produção, a situação muda.
 
-**Métricas de Sistema:**
+Uma API pode estar recebendo centenas ou milhares de requisições. Ela pode depender de MongoDB, RabbitMQ, outros microsserviços, API Gateway, serviços externos e containers rodando em máquinas diferentes. Nesse cenário, um erro raramente aparece com uma explicação pronta.
 
-- CPU usage: 85%
-- Memória: 2.5GB / 4GB
-- Disco: 80% utilizado
+Imagine uma chamada para criar um pedido:
 
-**Métricas de Aplicação:**
+- o cliente envia a requisição para o API Gateway;
+- o gateway encaminha para o serviço de pedidos;
+- o serviço de pedidos consulta produtos;
+- o serviço grava dados no MongoDB;
+- depois publica um evento no RabbitMQ;
+- outro serviço consome esse evento e continua o processamento.
 
-- Taxa de requisições: 1000 req/s
-- Latência média: 150ms
-- Taxa de erro: 0.5%
+Se o pedido demora demais, onde está o problema?
 
-**Alertas:**
+Pode ser no gateway, no serviço de pedidos, no banco, na fila, em uma chamada externa ou até em uma regra de negócio mal implementada. Sem observabilidade, a equipe fica tentando adivinhar. Com observabilidade, a investigação passa a se apoiar em dados.
 
-- CPU acima de 90% → Alerta enviado
-- Taxa de erro acima de 5% → Alerta enviado
-- Latência acima de 1s → Alerta enviado
-
-## O que é Observabilidade?
-
-**Observabilidade** é uma abordagem mais **investigativa** e **exploratória**. Ela analisa atentamente as interações de componentes distribuídos do sistema e os dados coletados pelo monitoramento para encontrar a **causa raiz dos problemas**.
-
-### Analogia: Detetive Investigando um Crime
-
-Imagine um **detetive investigando um crime**:
-
-- Monitoramento = **Câmeras de segurança** (mostram o que aconteceu)
-- Observabilidade = **Detetive analisando evidências** (descobre o porquê)
-
-O detetive não se limita às câmeras. Ele:
-
-- Analisa **rastros** (logs)
-- Segue **pistas** (traces)
-- Correlaciona **evidências** (métricas, logs, traces)
-- Investiga **interações** entre suspeitos (componentes do sistema)
-
-**Características:**
-
-- Focado em **investigação** e **causa raiz**
-- **Proativo**: permite descobrir problemas desconhecidos
-- Baseado em **análise exploratória** de dados
-- Responde à pergunta: **"Por que isso está acontecendo?"**
-
-### Os Três Pilares da Observabilidade
-
-A observabilidade é construída sobre **três pilares fundamentais**:
-
-#### 1. Métricas (Metrics)
-
-**O que são:** Medidas numéricas coletadas ao longo do tempo.
-
-**Exemplos:**
-
-- Número de requisições por segundo
-- Tempo de resposta médio
-- Taxa de erro
-- Uso de CPU/Memória
-
-**Características:**
-
-- Leves e eficientes
-- Agregáveis (soma, média, percentis)
-- Ideais para alertas e dashboards
-
-**Quando usar:**
-
-- Monitorar performance geral
-- Detectar anomalias
-- Criar alertas
-
-#### 2. Logs
-
-**O que são:** Registros textuais de eventos que aconteceram no sistema.
-
-**Exemplos:**
-```
-[2024-01-15 10:30:45] INFO: Usuário autenticado com sucesso - userId: 123
-[2024-01-15 10:30:46] ERROR: Falha ao processar pagamento - paymentId: 456
-[2024-01-15 10:30:47] DEBUG: Consultando banco de dados - query: SELECT * FROM users
-```
-
-**Características:**
-
-- Detalhados e contextuais
-- Incluem timestamps e contexto
-- Ideais para debugging
-
-**Quando usar:**
-
-- Investigar erros específicos
-- Rastrear fluxo de execução
-- Auditoria e compliance
-
-#### 3. Traces (Rastreamento Distribuído)
-
-**O que são:** Registros do caminho completo de uma requisição através de múltiplos serviços.
-
-**Exemplo:**
-```
-Requisição: GET /api/pedidos/123
-  ├─ API Gateway (10ms)
-  │   └─ Serviço de Pedidos (50ms)
-  │       ├─ Consulta Banco de Dados (30ms)
-  │       └─ Serviço de Produtos (20ms)
-  │           └─ Consulta Cache (5ms)
-  └─ Total: 80ms
-```
-
-**Características:**
-
-- Mostram **interações entre serviços**
-- Identificam **gargalos** de performance
-- Rastreiam **causa raiz** em sistemas distribuídos
-
-**Quando usar:**
-
-- Sistemas com múltiplos microsserviços
-- Identificar gargalos de performance
-- Entender fluxo de requisições
-
-## Diferenças Principais
-
-### Monitoramento vs Observabilidade
-
-| Aspecto | Monitoramento | Observabilidade |
-|---------|---------------|-----------------|
-| **Foco** | Métricas conhecidas | Investigação exploratória |
-| **Abordagem** | Reativa (alerta após problema) | Proativa (descobre problemas desconhecidos) |
-| **Pergunta** | "O que está acontecendo?" | "Por que isso está acontecendo?" |
-| **Dados** | Métricas pré-definidas | Métricas + Logs + Traces |
-| **Escopo** | Componentes individuais | Sistema distribuído como um todo |
-| **Quando usar** | Problemas conhecidos | Problemas desconhecidos |
-
-### Analogia: Médico vs Detetive
-
-**Monitoramento = Médico com Exames de Rotina**
-
-- Faz exames pré-definidos (pressão, temperatura, batimentos)
-- Compara com valores normais
-- Alerta quando algo está fora do normal
-- Focado em **sintomas conhecidos**
-
-**Observabilidade = Detetive Investigando**
-
-- Coleta evidências (métricas, logs, traces)
-- Analisa padrões e correlações
-- Descobre causas raiz
-- Focado em **entender o problema completo**
-
-## Como Funcionam Juntos?
-
-**Monitoramento e Observabilidade são complementares**, não opostos:
-
-```
-Monitoramento (O QUE)
-  ↓
-Coleta dados: Métricas, Logs, Traces
-  ↓
-Observabilidade (POR QUÊ)
-  ↓
-Investiga causa raiz
-  ↓
-Corrige problema
-  ↓
-Atualiza monitoramento (novas métricas)
-```
-
-### Fluxo Prático
-
-**1. Monitoramento detecta problema:**
-```
- Alerta: Taxa de erro aumentou para 10%
-```
-
-**2. Observabilidade investiga:**
-
-```
-- Analisa logs: "Erro ao conectar no banco de dados"
-- Verifica traces: "Timeout na conexão com PostgreSQL"
-- Correlaciona métricas: "Conexões de banco esgotadas"
-```
-
-**3. Causa raiz identificada:**
-
-```
-Problema: Pool de conexões do banco está esgotado
-Causa: Query lenta está mantendo conexões abertas
-```
-
-**4. Solução aplicada:**
-
-```
-- Otimiza query lenta
-- Aumenta pool de conexões
-- Adiciona timeout nas queries
-```
-
-**5. Monitoramento atualizado:**
-
-```
-- Nova métrica: "Tamanho do pool de conexões"
-- Novo alerta: "Pool acima de 80% de uso"
-```
-
-## Benefícios da Observabilidade
-
-### 1. Detecção Rápida de Problemas
-
-**Sem observabilidade:**
-
-- Usuário reporta problema
-- Equipe investiga manualmente
-- Tempo de resolução: horas/dias
-
-**Com observabilidade:**
-
-- Sistema detecta problema automaticamente
-- Alertas são enviados imediatamente
-- Equipe já tem contexto para investigar
-- Tempo de resolução: minutos
-
-### 2. Investigação de Causa Raiz
-
-**Sem observabilidade:**
-
-- "O sistema está lento"
-- Difícil identificar onde está o problema
-- Testes manuais demorados
-
-**Com observabilidade:**
-
-- Traces mostram exatamente onde está o gargalo
-- Logs fornecem contexto do erro
-- Métricas mostram padrões de comportamento
-- Causa raiz identificada rapidamente
-
-### 3. Otimização de Performance
-
-**Sem observabilidade:**
-
-- "O sistema parece lento"
-- Difícil medir impacto de otimizações
-- Otimizações baseadas em suposições
-
-**Com observabilidade:**
-
-- Métricas mostram latência por endpoint
-- Traces identificam queries lentas
-- Logs mostram operações custosas
-- Otimizações baseadas em dados reais
-
-### 4. Prevenção de Problemas
-
-**Sem observabilidade:**
-
-- Problemas são descobertos quando afetam usuários
-- Reação sempre reativa
-
-**Com observabilidade:**
-
-- Padrões anômalos são detectados antes de causar problemas
-- Alertas proativos permitem ação preventiva
-- Tendências são identificadas cedo
-
-## Desafios e Considerações
-
-### 1. Volume de Dados
-
-**Problema:** Sistemas grandes geram **milhões de logs, métricas e traces** por dia.
-
-**Solução:**
-
-- **Sampling**: Coletar apenas uma amostra de traces (ex: 10%)
-- **Agregação**: Agregar métricas em intervalos (ex: média por minuto)
-- **Retenção**: Definir políticas de retenção (ex: logs por 30 dias)
-- **Filtragem**: Coletar apenas dados relevantes
-
-### 2. Custo
-
-**Problema:** Ferramentas de observabilidade podem ser **caras** (especialmente em escala).
-
-**Solução:**
-
-- **Priorização**: Coletar dados mais importantes primeiro
-- **Sampling inteligente**: Mais sampling em produção, menos em desenvolvimento
-- **Ferramentas open source**: Prometheus, Grafana, Jaeger (gratuitas)
-- **Otimização**: Remover dados redundantes
-
-### 3. Complexidade
-
-**Problema:** Configurar e manter observabilidade pode ser **complexo**.
-
-**Solução:**
-
-- **Ferramentas gerenciadas**: Usar serviços gerenciados (Datadog, New Relic)
-- **Automação**: Automatizar configuração com IaC (Infrastructure as Code)
-- **Padrões**: Estabelecer padrões de logging e métricas
-- **Documentação**: Documentar práticas e configurações
-
-### 4. Ruído de Alertas
-
-**Problema:** Muitos alertas podem causar **fadiga de alertas** (alerts fatigue).
-
-**Solução:**
-
-- **Alertas inteligentes**: Alertar apenas em situações críticas
-- **Agrupamento**: Agrupar alertas relacionados
-- **Priorização**: Classificar alertas por severidade
-- **Revisão periódica**: Revisar e ajustar alertas regularmente
-
-## Ferramentas Populares
+## Explicação conceitual
 
 ### Monitoramento
 
-**Prometheus + Grafana**
+Monitoramento é acompanhar sinais conhecidos do sistema.
 
-- Open source e gratuito
-- Muito popular e bem documentado
-- Ideal para métricas e alertas
-- Requer configuração manual
+Pense no painel de um carro. Ele mostra velocidade, combustível, temperatura e luzes de alerta. Você não precisa abrir o motor para saber que a temperatura subiu. O painel não explica toda a causa do problema, mas avisa que algo merece atenção.
 
-**Datadog**
+Em uma aplicação, o monitoramento cumpre um papel parecido. Ele acompanha informações como:
 
-- Gerenciado (serverless)
-- Interface muito amigável
-- Suporta métricas, logs e traces
-- Pago (pode ser caro em escala)
+- se a aplicação está de pé;
+- se o consumo de memória está alto;
+- se a CPU está sendo muito usada;
+- se a quantidade de erros aumentou;
+- se as requisições estão demorando mais do que o normal;
+- se uma dependência importante, como o MongoDB, está indisponível.
 
-**New Relic**
+O monitoramento responde principalmente: o que está acontecendo agora?
 
-- Gerenciado
-- Boa integração com aplicações
-- APM (Application Performance Monitoring)
-- Pago
+Ele é muito útil para alertas. Por exemplo, se a taxa de erro sobe de repente, alguém precisa saber. Se a API parou de responder, isso também precisa aparecer rápido.
+
+O ponto importante é que o monitoramento normalmente trabalha com perguntas que já conhecemos. A equipe define quais sinais quer acompanhar e configura limites aceitáveis.
 
 ### Observabilidade
 
-**OpenTelemetry**
+Observabilidade vai além de saber que algo está errado. Ela ajuda a entender por que algo está errado.
 
-- Padrão aberto e gratuito
-- Suporta múltiplas linguagens
-- Coleta métricas, logs e traces
-- Vendor-agnostic (funciona com qualquer backend)
+Quando uma API fica lenta, o monitoramento pode mostrar que a latência aumentou. Isso é importante, mas ainda não resolve o problema. A pergunta seguinte é mais difícil: por que a latência aumentou?
 
-**Jaeger**
+Pode ter sido uma consulta lenta no MongoDB. Pode ter sido uma fila acumulada no RabbitMQ. Pode ter sido um serviço externo fora do ar. Pode ter sido uma alteração recente no código.
 
-- Open source e gratuito
-- Especializado em distributed tracing
-- Interface web para visualização
-- Focado apenas em traces
+Observabilidade é a capacidade de investigar esse tipo de situação usando dados gerados pelo próprio sistema.
 
-**Elastic Stack (ELK)**
+Na prática, uma aplicação observável deixa rastros úteis para a equipe entender seu comportamento. Esses rastros não servem apenas para quando tudo dá errado. Eles também ajudam a melhorar performance, encontrar gargalos e confirmar se uma mudança realmente teve o efeito esperado.
 
-- Open source (versão básica)
-- Elasticsearch + Logstash + Kibana
-- Ideal para logs e busca
-- Pode ser complexo de configurar
+Em microsserviços, isso fica ainda mais importante porque uma requisição pode passar por vários serviços antes de terminar. Se cada serviço for uma caixa fechada, encontrar a causa de um problema vira tentativa e erro.
 
-## Quando Usar?
+### Monitoramento e observabilidade não são a mesma coisa
 
-###  Use Monitoramento quando:
+Monitoramento e observabilidade se complementam.
 
-- **Métricas conhecidas**: Você sabe o que quer monitorar
-- **Alertas reativos**: Precisa ser alertado quando algo acontece
-- **Sistema simples**: Aplicação monolítica ou poucos serviços
-- **Orçamento limitado**: Quer começar com soluções simples
+O monitoramento costuma avisar que existe um problema. A observabilidade ajuda a investigar o motivo.
 
-###  Use Observabilidade quando:
+Uma forma simples de pensar é:
 
-- **Sistemas distribuídos**: Múltiplos microsserviços
-- **Problemas desconhecidos**: Precisa investigar causas raiz
-- **Alta complexidade**: Muitas interações entre serviços
-- **Performance crítica**: Precisa otimizar latência e throughput
+- monitoramento mostra o sintoma;
+- observabilidade ajuda a encontrar a causa.
 
-### Recomendação
+Se a API começa a responder em cinco segundos, o monitoramento pode mostrar o aumento da latência. A observabilidade ajuda a descobrir se o tempo foi gasto no controller, no service, no MongoDB, em uma chamada HTTP para outro serviço ou no envio de uma mensagem para o RabbitMQ.
 
-**Comece com Monitoramento básico:**
+Para sistemas simples, monitorar alguns sinais básicos já ajuda bastante. Para microsserviços, só isso costuma ser pouco, porque o problema pode estar na comunicação entre partes diferentes.
 
-- Métricas essenciais (CPU, memória, latência, erros)
-- Logs estruturados
-- Alertas básicos
+### Os três pilares da observabilidade
 
-**Evolua para Observabilidade:**
+A observabilidade costuma ser explicada a partir de três pilares: logs, métricas e traces.
 
-- Adicione distributed tracing
-- Correlacione métricas, logs e traces
-- Implemente análise exploratória
+Eles não competem entre si. Cada um responde um tipo de pergunta.
 
-## Exemplo Prático: E-commerce
+### Logs
 
-**Cenário:** Cliente reporta que pedidos estão demorando muito.
+Logs são registros de eventos que aconteceram dentro da aplicação.
 
-### Sem Observabilidade
+Quando uma API recebe uma requisição, processa uma regra importante, encontra um erro ou finaliza uma operação relevante, ela pode registrar isso em log.
 
-```
-1. Cliente reporta: "Pedidos demoram 30 segundos"
-2. Equipe verifica logs manualmente
-3. Encontra: "Erro ao processar pagamento"
-4. Investiga serviço de pagamento
-5. Descobre: "Timeout na conexão com gateway"
-6. Tempo de resolução: 2 horas
-```
+Um bom log ajuda a responder perguntas como:
 
-### Com Observabilidade
+- qual operação estava sendo executada?
+- qual recurso estava envolvido?
+- qual erro aconteceu?
+- em qual ponto da aplicação o problema apareceu?
+- existe algum identificador que ajude a relacionar uma requisição com outra informação?
 
-```
-1. Monitoramento detecta: "Latência de /pedidos aumentou para 30s"
-2. Observabilidade investiga:
-   - Trace mostra: "Pedido leva 25s no serviço de pagamento"
-   - Logs mostram: "Timeout ao conectar com gateway de pagamento"
-   - Métricas mostram: "Taxa de timeout: 50%"
-3. Causa raiz identificada: "Gateway de pagamento está lento"
-4. Solução: "Implementar circuit breaker e fallback"
-5. Tempo de resolução: 15 minutos
-```
+Em Java com Spring Boot, logs normalmente são feitos com SLF4J junto com a implementação de logging configurada pelo próprio Spring Boot. O ponto principal para esta aula não é a ferramenta em si, mas a ideia: log não deve ser um texto jogado de qualquer jeito no console. Ele precisa ter contexto.
 
-## Conclusão
+Um log ruim diz apenas que deu erro.
 
-**Monitoramento** e **Observabilidade** são conceitos complementares que trabalham juntos para fornecer visibilidade completa do sistema.
+Um log útil mostra onde o erro aconteceu, qual operação estava em andamento e qual informação ajuda a investigar sem expor dados sensíveis.
 
-### Principais Takeaways:
+Logs são ótimos para investigar situações específicas, mas não são a melhor ferramenta para enxergar tendências gerais. Para isso, usamos métricas.
 
-1. **Monitoramento** = "O que está acontecendo?" (reativo, baseado em métricas conhecidas)
-2. **Observabilidade** = "Por que isso está acontecendo?" (proativo, investigativo)
-3. **Três pilares**: Métricas, Logs e Traces
-4. **Trabalham juntos**: Monitoramento detecta, Observabilidade investiga
-5. **Comece simples**: Métricas básicas → Logs estruturados → Distributed tracing
+### Métricas
 
-### Princípio Central:
+Métricas são números coletados ao longo do tempo.
 
-> **"Monitoramento te diz que algo está errado. Observabilidade te diz por quê e como corrigir."**
+Elas ajudam a enxergar o comportamento geral da aplicação. Em vez de olhar uma requisição isolada, você passa a observar padrões.
 
----
+Exemplos de perguntas que métricas ajudam a responder:
 
-## Referências
+- quantas requisições a API recebe por minuto?
+- quanto tempo as requisições estão levando?
+- qual endpoint tem mais erro?
+- a aplicação está consumindo muita memória?
+- o número de conexões com o banco aumentou?
+- a fila de mensagens está crescendo?
 
-- [AWS - Diferença entre Observabilidade e Monitoramento](https://aws.amazon.com/pt/compare/the-difference-between-monitoring-and-observability/)
-- [ServiceNow - O que é Observabilidade vs Monitoramento](https://www.servicenow.com/br/products/observability/what-is-observability-vs-monitoring.html)
-- [OpenTelemetry - Documentação Oficial](https://opentelemetry.io/docs/)
-- [Prometheus - Guia de Início](https://prometheus.io/docs/introduction/overview/)
+Métricas são a base de muitos dashboards e alertas. Quando alguém olha um painel com gráficos de latência, quantidade de erros e uso de recursos, está olhando métricas.
 
+No ecossistema Spring Boot, o Micrometer aparece como uma camada de métricas. Ele permite que a aplicação exponha dados em um formato que ferramentas como Prometheus conseguem coletar.
+
+O Prometheus, por sua vez, coleta essas métricas em intervalos definidos e permite consultar o histórico. Mais adiante, essas informações podem aparecer em dashboards, geralmente com ferramentas como Grafana.
+
+O importante por enquanto é entender o papel de cada um:
+
+- Micrometer ajuda a aplicação Spring Boot a produzir métricas;
+- Prometheus coleta e armazena essas métricas;
+- dashboards transformam esses dados em visualização;
+- alertas avisam quando algum comportamento sai do esperado.
+
+### Traces
+
+Traces mostram o caminho de uma requisição pelo sistema.
+
+Esse conceito fica mais claro em microsserviços. Uma chamada pode começar no API Gateway, passar por um serviço de pedidos, consultar um serviço de produtos, acessar o MongoDB e publicar uma mensagem no RabbitMQ.
+
+Se essa chamada demora, olhar apenas o tempo total não basta. Precisamos saber onde o tempo foi gasto.
+
+O trace ajuda justamente nisso. Ele mostra as etapas da requisição e quanto tempo cada parte levou.
+
+Com traces, a equipe consegue responder perguntas como:
+
+- por quais serviços a requisição passou?
+- qual serviço demorou mais?
+- houve erro em alguma etapa intermediária?
+- a lentidão está no banco, em uma chamada HTTP ou em uma fila?
+- a mesma requisição gerou eventos em outros serviços?
+
+Traces são especialmente úteis quando o sistema tem várias aplicações conversando entre si. Em uma API pequena, talvez eles não sejam a primeira necessidade. Em uma arquitetura com microsserviços, eles passam a ter muito valor.
+
+### Health check
+
+Health check é uma verificação de saúde da aplicação.
+
+Em Spring Boot, esse assunto aparece com frequência por causa do Spring Boot Actuator. Ele permite expor informações operacionais da aplicação, como saúde, métricas e outros dados úteis para ambiente de execução.
+
+Um health check básico responde se a aplicação está viva. Um health check mais completo pode considerar dependências importantes, como banco de dados, mensageria ou serviços externos.
+
+Isso é importante porque uma aplicação pode estar com o processo em execução, mas ainda assim não conseguir trabalhar corretamente.
+
+Por exemplo:
+
+- a API está de pé, mas perdeu conexão com o MongoDB;
+- o serviço responde, mas não consegue publicar mensagens no RabbitMQ;
+- o container iniciou, mas a aplicação ainda não está pronta para receber requisições.
+
+Ferramentas de infraestrutura usam health checks para decidir se uma aplicação pode receber tráfego, se precisa ser reiniciada ou se deve ser removida temporariamente do balanceamento.
+
+Para quem está aprendendo, a ideia principal é simples: health check é uma forma padronizada de perguntar para a aplicação se ela está em condições de funcionar.
+
+### Logs, métricas e traces trabalhando juntos
+
+Logs, métricas e traces ficam mais fortes quando são usados em conjunto.
+
+Imagine que uma API de pedidos começou a apresentar erro.
+
+As métricas mostram que a taxa de erro subiu. Isso chama atenção rapidamente.
+
+Os traces mostram que a maior parte das falhas acontece quando o serviço de pedidos tenta consultar o serviço de produtos.
+
+Os logs mostram mensagens de timeout nessa chamada.
+
+Agora a investigação fica muito mais objetiva. Em vez de procurar em todos os serviços, a equipe já sabe onde concentrar a análise.
+
+Esse é o valor da observabilidade: reduzir chute e aumentar clareza.
+
+### Observabilidade no mundo Spring Boot
+
+Em aplicações Spring Boot, alguns nomes aparecem bastante quando falamos de observabilidade.
+
+Spring Boot Actuator expõe informações operacionais da aplicação. Ele é muito usado para health checks e métricas básicas.
+
+Micrometer funciona como uma ponte para métricas. Ele coleta e organiza medidas da aplicação de uma forma compatível com ferramentas externas.
+
+Prometheus coleta métricas expostas pela aplicação e guarda o histórico. Ele é muito usado em ambientes com containers e microsserviços.
+
+Grafana costuma ser usado para montar dashboards em cima dessas métricas.
+
+OpenTelemetry aparece quando o assunto avança para tracing e padronização da coleta de dados de observabilidade.
+
+Nesta disciplina, faz sentido começar pelo básico: health checks, logs e métricas. Depois disso, tracing fica mais fácil de entender, porque você já sabe o problema que ele resolve.
+
+### O que observar em uma API
+
+Nem tudo precisa virar métrica, log ou alerta.
+
+Observabilidade boa não é coletar tudo. É coletar o que ajuda a entender o sistema.
+
+Em uma API REST, alguns sinais costumam ser importantes:
+
+- quantidade de requisições;
+- tempo de resposta;
+- taxa de erro;
+- endpoints mais acessados;
+- status HTTP retornados;
+- consumo de memória;
+- uso de CPU;
+- disponibilidade do MongoDB;
+- quantidade de mensagens em filas;
+- erros de comunicação com outros serviços.
+
+Também é importante observar regras do domínio.
+
+Em uma API de pedidos, por exemplo, pode fazer sentido acompanhar pedidos criados, pedidos cancelados, falhas de pagamento e eventos publicados. Essas informações aproximam a observabilidade da realidade do negócio.
+
+Esse cuidado evita um erro comum: olhar só para CPU e memória e esquecer que a aplicação existe para executar regras importantes.
+
+## Setup inicial
+
+Esta aula não precisa de instalação nem criação de projeto.
+
+Antes de configurar ferramentas, precisamos entender o vocabulário. No tutorial prático, vamos aplicar esses conceitos em uma aplicação Spring Boot usando Actuator, Micrometer e Prometheus.
+
+## Passo a passo
+
+### 1. Comece pelo problema
+
+Antes de pensar em ferramenta, pense no problema.
+
+Uma API em produção precisa responder perguntas simples:
+
+- ela está funcionando?
+- está lenta?
+- está gerando muitos erros?
+- depende de algum serviço que caiu?
+- qual parte da requisição está demorando?
+- o problema afeta todos os usuários ou apenas uma operação?
+
+Sem essas respostas, qualquer falha vira investigação manual.
+
+### 2. Entenda o papel do monitoramento
+
+Monitoramento acompanha sinais conhecidos.
+
+Ele serve para avisar rapidamente quando algo saiu do comportamento esperado. Isso inclui aplicação fora do ar, erro demais, lentidão ou consumo exagerado de recursos.
+
+Use monitoramento para enxergar o estado atual do sistema.
+
+### 3. Entenda o papel da observabilidade
+
+Observabilidade ajuda a investigar.
+
+Ela entra quando o alerta apareceu e agora precisamos entender a causa. A investigação usa logs, métricas e traces para montar uma visão mais completa.
+
+Use observabilidade para descobrir por que o sistema se comportou daquele jeito.
+
+### 4. Separe logs, métricas e traces
+
+Logs mostram eventos.
+
+Métricas mostram números ao longo do tempo.
+
+Traces mostram o caminho de uma requisição.
+
+Quando esses três tipos de informação são bem usados, a equipe consegue investigar problemas com muito mais precisão.
+
+### 5. Comece simples
+
+Para uma primeira aplicação Spring Boot, não faz sentido começar com uma pilha enorme de ferramentas.
+
+Um caminho mais didático é:
+
+- primeiro entender logs;
+- depois expor health checks;
+- depois coletar métricas;
+- depois visualizar essas métricas;
+- depois estudar tracing.
+
+Essa evolução acompanha a complexidade do sistema. Conforme a aplicação cresce, a observabilidade também cresce.
+
+## Código completo
+
+Esta aula não tem código completo porque o objetivo aqui é teórico.
+
+A implementação fica para o tutorial prático. Lá sim fará sentido configurar dependências, endpoints de saúde, métricas e integração com Prometheus.
+
+## Erros comuns
+
+### Confundir log com observabilidade completa
+
+Ter logs ajuda, mas não resolve tudo.
+
+Logs mostram eventos específicos. Eles não substituem métricas, dashboards, alertas e traces. Uma aplicação pode ter muitos logs e ainda assim ser difícil de investigar.
+
+### Registrar informação demais
+
+Log demais atrapalha.
+
+Quando tudo vira log, encontrar o que importa fica difícil. Além disso, logs em excesso podem aumentar custo de armazenamento e prejudicar desempenho.
+
+O ideal é registrar eventos relevantes, erros importantes e informações que realmente ajudem a investigar.
+
+### Registrar dados sensíveis
+
+Logs não devem expor senha, token, documento, cartão, segredo de API ou informação pessoal desnecessária.
+
+Esse cuidado é técnico e também ético. Log costuma circular por ferramentas externas e pode ficar armazenado por muito tempo.
+
+### Criar alertas para tudo
+
+Alerta demais faz a equipe parar de prestar atenção.
+
+Um bom alerta precisa indicar algo que exige ação. Se um alerta dispara toda hora e ninguém faz nada, ele provavelmente está mal configurado.
+
+### Olhar só infraestrutura
+
+CPU, memória e disco são importantes, mas não contam a história inteira.
+
+Uma API pode estar com CPU baixa e, mesmo assim, falhar em uma regra importante. Por isso, também precisamos observar sinais da aplicação e do negócio.
+
+### Começar por ferramentas antes de entender o conceito
+
+Prometheus, Grafana, Actuator e OpenTelemetry são ferramentas úteis, mas elas não substituem entendimento.
+
+Antes de configurar qualquer coisa, você precisa saber que pergunta quer responder. Ferramenta sem pergunta vira painel bonito que ninguém usa.
+
+## Resumo
+
+Observabilidade é a capacidade de entender o comportamento interno de uma aplicação a partir dos sinais que ela produz.
+
+Monitoramento ajuda a perceber que algo saiu do esperado. Observabilidade ajuda a investigar o motivo.
+
+Os três pilares mais conhecidos são logs, métricas e traces:
+
+- logs registram eventos importantes;
+- métricas mostram números ao longo do tempo;
+- traces acompanham o caminho de uma requisição entre serviços.
+
+No ecossistema Spring Boot, vamos trabalhar principalmente com Spring Boot Actuator, Micrometer e Prometheus. Primeiro precisamos entender a teoria. Depois, no tutorial, esses conceitos viram configuração e prática.

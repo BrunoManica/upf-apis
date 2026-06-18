@@ -1,0 +1,1089 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Slides - Observabilidade</title>
+    <style>
+      :root {
+        --bg: #080b10;
+        --bg-soft: #0d1118;
+        --sidebar: #111722;
+        --panel: #151b26;
+        --panel-2: #101620;
+        --panel-3: #1a2230;
+        --border: #2a3444;
+        --border-soft: #202938;
+        --text: #f2f5f8;
+        --muted: #a4afbd;
+        --dim: #707d8d;
+        --orange: #ff8f3d;
+        --yellow: #f6c85f;
+        --green: #73d18a;
+        --cyan: #56c7f2;
+        --blue: #7aa2f7;
+        --red: #f87171;
+        --purple: #b78cff;
+        --surface-width: min(1180px, calc(100vw - 34px));
+        --header-height: 66px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 18% 12%, rgba(255, 143, 61, 0.16), transparent 28%),
+          radial-gradient(circle at 82% 20%, rgba(86, 199, 242, 0.1), transparent 24%),
+          linear-gradient(180deg, #0b0f16 0%, var(--bg) 46%, #06080c 100%);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial,
+          sans-serif;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        min-height: var(--header-height);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(8, 11, 16, 0.9);
+        backdrop-filter: blur(18px);
+      }
+
+      .topbar-inner {
+        width: var(--surface-width);
+        min-height: var(--header-height);
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 230px 1fr;
+        gap: 16px;
+        align-items: center;
+      }
+
+      .brand {
+        min-width: 0;
+        display: grid;
+        gap: 3px;
+      }
+
+      .brand strong {
+        color: var(--orange);
+        font-size: 0.94rem;
+        letter-spacing: 0;
+      }
+
+      .brand span {
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .topnav {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding: 10px 0;
+      }
+
+      .topnav a {
+        flex: 0 0 auto;
+        min-width: 38px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 0.8rem;
+        font-weight: 700;
+      }
+
+      .topnav a:hover {
+        color: var(--text);
+        border-color: rgba(255, 143, 61, 0.7);
+        background: #1f2633;
+      }
+
+      .deck {
+        padding: 18px 0 30px;
+      }
+
+      .slide {
+        min-height: calc(100vh - var(--header-height));
+        padding: 14px 0;
+        scroll-margin-top: calc(var(--header-height) + 10px);
+        display: grid;
+        place-items: center;
+      }
+
+      .frame {
+        width: var(--surface-width);
+        min-height: min(720px, calc(100vh - var(--header-height) - 48px));
+        display: grid;
+        grid-template-columns: 78px 1fr;
+        background: rgba(21, 27, 38, 0.96);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 26px 70px rgba(0, 0, 0, 0.42);
+        overflow: hidden;
+      }
+
+      .rail {
+        padding: 16px 12px;
+        display: grid;
+        align-content: start;
+        justify-items: center;
+        gap: 12px;
+        background: var(--sidebar);
+        border-right: 1px solid var(--border);
+      }
+
+      .mark {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        color: #18110a;
+        background: var(--orange);
+        border-radius: 7px;
+        font-weight: 900;
+      }
+
+      .rail-dot {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        color: var(--dim);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        font-size: 0.78rem;
+        font-weight: 800;
+        background: #0c1119;
+      }
+
+      .rail-dot.active {
+        color: var(--text);
+        border-color: var(--orange);
+        box-shadow: inset 3px 0 0 var(--orange);
+      }
+
+      .workspace {
+        min-width: 0;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+      }
+
+      .panelbar {
+        min-height: 54px;
+        padding: 0 22px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel-2);
+      }
+
+      .crumb {
+        min-width: 0;
+        color: var(--muted);
+        font-size: 0.86rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .status {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--green);
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+
+      .status::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 14px rgba(115, 209, 138, 0.75);
+      }
+
+      .content {
+        padding: 34px;
+        display: grid;
+        align-content: center;
+        gap: 24px;
+      }
+
+      .content.top {
+        align-content: start;
+      }
+
+      .kicker {
+        width: fit-content;
+        padding: 7px 10px;
+        color: var(--orange);
+        background: rgba(255, 143, 61, 0.1);
+        border: 1px solid rgba(255, 143, 61, 0.38);
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 800;
+      }
+
+      .title-xl {
+        max-width: 13ch;
+        font-size: clamp(3rem, 6.2vw, 6rem);
+        line-height: 0.98;
+        letter-spacing: 0;
+      }
+
+      .title-lg {
+        max-width: 18ch;
+        font-size: clamp(2.2rem, 4.4vw, 4.5rem);
+        line-height: 1.04;
+        letter-spacing: 0;
+      }
+
+      .lead {
+        max-width: 58ch;
+        color: var(--muted);
+        font-size: clamp(1.1rem, 1.8vw, 1.45rem);
+        line-height: 1.45;
+      }
+
+      .big {
+        max-width: 33ch;
+        font-size: clamp(1.55rem, 3.2vw, 3rem);
+        line-height: 1.16;
+        font-weight: 800;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .grid-2,
+      .grid-3,
+      .grid-4 {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .grid-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .tile {
+        min-width: 0;
+        padding: 18px;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+
+      .tile h3 {
+        margin-bottom: 8px;
+        color: var(--text);
+        font-size: 1rem;
+      }
+
+      .tile p {
+        color: var(--muted);
+        line-height: 1.42;
+      }
+
+      .metric {
+        display: grid;
+        gap: 10px;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      .metric strong {
+        font-size: clamp(2rem, 4vw, 3.8rem);
+        line-height: 1;
+      }
+
+      .delta {
+        width: fit-content;
+        padding: 5px 8px;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 800;
+      }
+
+      .delta.good {
+        color: var(--green);
+        background: rgba(115, 209, 138, 0.11);
+      }
+
+      .delta.warn {
+        color: var(--yellow);
+        background: rgba(246, 200, 95, 0.12);
+      }
+
+      .delta.bad {
+        color: var(--red);
+        background: rgba(248, 113, 113, 0.12);
+      }
+
+      .chart {
+        position: relative;
+        min-height: 230px;
+        padding: 18px;
+        overflow: hidden;
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+          #0d131d;
+        background-size: 100% 46px, 70px 100%;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+
+      .chart-line {
+        position: absolute;
+        left: 20px;
+        right: 20px;
+        height: 4px;
+        border-radius: 999px;
+        transform-origin: left center;
+      }
+
+      .line-a {
+        top: 64%;
+        background: var(--green);
+        transform: rotate(-8deg);
+        box-shadow: 90px -38px 0 var(--green), 180px -12px 0 var(--green), 270px -62px 0 var(--green), 360px -46px 0 var(--green), 450px -88px 0 var(--green);
+      }
+
+      .line-b {
+        top: 54%;
+        background: var(--orange);
+        transform: rotate(5deg);
+        box-shadow: 90px 22px 0 var(--orange), 180px -18px 0 var(--orange), 270px 26px 0 var(--orange), 360px -14px 0 var(--orange), 450px 18px 0 var(--orange);
+      }
+
+      .chart-label {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .bars {
+        height: 230px;
+        display: grid;
+        grid-template-columns: repeat(12, minmax(12px, 1fr));
+        gap: 9px;
+        align-items: end;
+      }
+
+      .bar {
+        min-height: 18px;
+        border-radius: 5px 5px 0 0;
+        background: linear-gradient(180deg, var(--cyan), #245a74);
+      }
+
+      .bar.warn {
+        background: linear-gradient(180deg, var(--yellow), #7a5d22);
+      }
+
+      .bar.bad {
+        background: linear-gradient(180deg, var(--red), #7e2929);
+      }
+
+      .logbox {
+        max-height: 360px;
+        overflow: hidden;
+        padding: 18px;
+        display: grid;
+        gap: 10px;
+        color: #d5dce7;
+        background: #070a0f;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+        font-size: clamp(0.82rem, 1.2vw, 1rem);
+        line-height: 1.45;
+      }
+
+      .logrow {
+        display: grid;
+        grid-template-columns: 72px 72px 1fr;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .level-info {
+        color: var(--cyan);
+      }
+
+      .level-warn {
+        color: var(--yellow);
+      }
+
+      .level-error {
+        color: var(--red);
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+        align-items: stretch;
+      }
+
+      .node {
+        min-height: 112px;
+        padding: 16px;
+        display: grid;
+        align-content: center;
+        gap: 8px;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+
+      .node b {
+        font-size: 1.05rem;
+      }
+
+      .node span {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .node.hot {
+        border-color: rgba(255, 143, 61, 0.68);
+        background: rgba(255, 143, 61, 0.09);
+      }
+
+      .list {
+        margin: 0;
+        padding-left: 22px;
+        display: grid;
+        gap: 13px;
+        color: var(--muted);
+        font-size: clamp(1.05rem, 1.7vw, 1.35rem);
+        line-height: 1.35;
+      }
+
+      .list strong {
+        color: var(--text);
+      }
+
+      .terminal {
+        margin: 0;
+        padding: 18px;
+        overflow-x: auto;
+        color: #d7ffe2;
+        background: #05080c;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+        font-size: clamp(0.9rem, 1.25vw, 1.08rem);
+        line-height: 1.5;
+      }
+
+      .callout {
+        padding: 20px;
+        color: var(--text);
+        background: linear-gradient(90deg, rgba(255, 143, 61, 0.18), rgba(86, 199, 242, 0.08));
+        border: 1px solid rgba(255, 143, 61, 0.42);
+        border-radius: 8px;
+        font-size: clamp(1.08rem, 1.7vw, 1.42rem);
+        line-height: 1.38;
+      }
+
+      .pager {
+        min-height: 56px;
+        padding: 0 22px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        border-top: 1px solid var(--border);
+        background: var(--panel-2);
+      }
+
+      .pager a {
+        padding: 8px 12px;
+        color: var(--text);
+        background: var(--panel-3);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 0.86rem;
+        font-weight: 800;
+      }
+
+      .pager a:hover {
+        border-color: var(--orange);
+      }
+
+      .pager span {
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+      .mini-dashboard {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 16px;
+      }
+
+      .spark {
+        height: 74px;
+        border-radius: 6px;
+        background:
+          linear-gradient(135deg, transparent 12%, rgba(86, 199, 242, 0.2) 12% 16%, transparent 16% 31%, rgba(115, 209, 138, 0.42) 31% 36%, transparent 36% 52%, rgba(255, 143, 61, 0.5) 52% 57%, transparent 57% 72%, rgba(86, 199, 242, 0.48) 72% 77%, transparent 77%),
+          #0b1018;
+        border: 1px solid var(--border-soft);
+      }
+
+      .heatmap {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 5px;
+      }
+
+      .cell {
+        aspect-ratio: 1;
+        border-radius: 4px;
+        background: rgba(115, 209, 138, 0.25);
+      }
+
+      .cell.mid {
+        background: rgba(246, 200, 95, 0.45);
+      }
+
+      .cell.hot {
+        background: rgba(248, 113, 113, 0.72);
+      }
+
+      @media (max-width: 920px) {
+        .topbar-inner,
+        .grid-2,
+        .grid-3,
+        .grid-4,
+        .mini-dashboard,
+        .flow {
+          grid-template-columns: 1fr;
+        }
+
+        .slide {
+          min-height: auto;
+        }
+
+        .frame {
+          min-height: auto;
+          grid-template-columns: 1fr;
+        }
+
+        .rail {
+          display: none;
+        }
+
+        .content {
+          padding: 24px;
+        }
+
+        .bars {
+          height: 180px;
+        }
+      }
+
+      @media (max-width: 560px) {
+        :root {
+          --surface-width: calc(100vw - 18px);
+        }
+
+        .panelbar,
+        .pager {
+          padding: 0 14px;
+        }
+
+        .content {
+          padding: 18px;
+        }
+
+        .logrow {
+          grid-template-columns: 1fr;
+          gap: 2px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <strong>UPF APIs</strong>
+          <span>Aula 6 · Observabilidade · Slides</span>
+        </div>
+        <nav class="topnav" aria-label="Mapa dos slides">
+          <a href="#slide-01">01</a>
+          <a href="#slide-02">02</a>
+          <a href="#slide-03">03</a>
+          <a href="#slide-04">04</a>
+          <a href="#slide-05">05</a>
+          <a href="#slide-06">06</a>
+          <a href="#slide-07">07</a>
+          <a href="#slide-08">08</a>
+          <a href="#slide-09">09</a>
+          <a href="#slide-10">10</a>
+          <a href="#slide-11">11</a>
+          <a href="#slide-12">12</a>
+          <a href="#slide-13">13</a>
+          <a href="#slide-14">14</a>
+          <a href="#slide-15">15</a>
+          <a href="#slide-16">16</a>
+          <a href="#slide-17">17</a>
+          <a href="#slide-18">18</a>
+          <a href="#slide-19">19</a>
+          <a href="#slide-20">20</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="deck">
+      <section class="slide" id="slide-01">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">01</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">dashboards / aula-6 / overview</span><span class="status">online</span></div>
+            <div class="content">
+              <span class="kicker">Aula 6</span>
+              <h1 class="title-xl">Observabilidade em APIs</h1>
+              <p class="lead">Health checks, logs, metricas e Prometheus no contexto de Spring Boot e microsservicos.</p>
+              <div class="mini-dashboard">
+                <div class="chart"><div class="chart-label"><span>latencia</span><span>ultimos 15 min</span></div><div class="chart-line line-a"></div><div class="chart-line line-b"></div></div>
+                <div class="grid-2">
+                  <div class="tile metric"><span>status</span><strong style="color: var(--green)">UP</strong><b class="delta good">health ok</b></div>
+                  <div class="tile metric"><span>erro 5xx</span><strong style="color: var(--red)">0.4%</strong><b class="delta warn">monitorar</b></div>
+                </div>
+              </div>
+            </div>
+            <div class="pager"><span>01 / 20</span><a href="#slide-02">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-02">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">02</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">objetivo / o que vamos enxergar</span><span class="status">coletando</span></div>
+            <div class="content">
+              <h2 class="title-lg">Objetivo da aula</h2>
+              <p class="big">Parar de adivinhar e comecar a investigar com dados.</p>
+              <div class="callout">A aplicacao precisa responder: estou saudavel, estou lenta, estou errando e onde o problema comecou?</div>
+            </div>
+            <div class="pager"><a href="#slide-01">Anterior</a><span>02 / 20</span><a href="#slide-03">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-03">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">03</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">contexto / producao nao e localhost</span><span class="status">trafego real</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Quando o sistema cresce</h2>
+              <div class="flow">
+                <div class="node"><b>Cliente</b><span>chama a API</span></div>
+                <div class="node"><b>Gateway</b><span>encaminha</span></div>
+                <div class="node hot"><b>Pedidos</b><span>processa regra</span></div>
+                <div class="node"><b>MongoDB</b><span>salva dados</span></div>
+                <div class="node"><b>RabbitMQ</b><span>entrega evento</span></div>
+              </div>
+              <p class="lead">Se o pedido demora, o problema pode estar em qualquer ponto. Sem sinais, a equipe tenta descobrir no escuro.</p>
+            </div>
+            <div class="pager"><a href="#slide-02">Anterior</a><span>03 / 20</span><a href="#slide-04">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-04">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">04</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">monitoramento / sintomas conhecidos</span><span class="status">alertas</span></div>
+            <div class="content">
+              <h2 class="title-lg">Monitoramento</h2>
+              <p class="big">Acompanha sinais que ja sabemos que importam.</p>
+              <div class="grid-4">
+                <div class="tile metric"><span>CPU</span><strong>62%</strong><b class="delta good">normal</b></div>
+                <div class="tile metric"><span>memoria</span><strong>1.8G</strong><b class="delta good">estavel</b></div>
+                <div class="tile metric"><span>latencia p95</span><strong>820ms</strong><b class="delta warn">alto</b></div>
+                <div class="tile metric"><span>erros</span><strong>3.1%</strong><b class="delta bad">alerta</b></div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-03">Anterior</a><span>04 / 20</span><a href="#slide-05">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-05">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">05</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">observabilidade / investigacao</span><span class="status">drilldown</span></div>
+            <div class="content">
+              <h2 class="title-lg">Observabilidade</h2>
+              <p class="big">Ajuda a descobrir por que o sintoma apareceu.</p>
+              <ul class="list">
+                <li><strong>Monitoramento:</strong> a latencia subiu.</li>
+                <li><strong>Observabilidade:</strong> o tempo foi gasto na consulta ao MongoDB.</li>
+                <li><strong>Acao:</strong> investigar indice, volume de dados ou consulta lenta.</li>
+              </ul>
+            </div>
+            <div class="pager"><a href="#slide-04">Anterior</a><span>05 / 20</span><a href="#slide-06">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-06">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">06</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">pilares / tres tipos de sinal</span><span class="status">correlacionando</span></div>
+            <div class="content">
+              <h2 class="title-lg">Logs, metricas e traces</h2>
+              <div class="grid-3">
+                <div class="tile"><h3>Logs</h3><p>Eventos importantes com contexto: pedido criado, erro ao buscar, timeout, falha de validacao.</p></div>
+                <div class="tile"><h3>Metricas</h3><p>Numeros ao longo do tempo: requisicoes, latencia, memoria, CPU, status HTTP.</p></div>
+                <div class="tile"><h3>Traces</h3><p>Caminho da requisicao entre servicos, banco, filas e chamadas externas.</p></div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-05">Anterior</a><span>06 / 20</span><a href="#slide-07">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-07">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">07</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">logs / eventos com contexto</span><span class="status">tail</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Log bom conta o que aconteceu</h2>
+              <div class="logbox">
+                <div class="logrow"><span>10:15:21</span><b class="level-info">INFO</b><span>Criando pedido para o cliente ana@email.com</span></div>
+                <div class="logrow"><span>10:15:21</span><b class="level-info">INFO</b><span>Pedido criado com sucesso. orderId=662f...</span></div>
+                <div class="logrow"><span>10:16:04</span><b class="level-warn">WARN</b><span>Pedido nao encontrado. orderId=id-inexistente</span></div>
+                <div class="logrow"><span>10:17:32</span><b class="level-error">ERROR</b><span>Timeout ao consultar dependencia externa</span></div>
+              </div>
+              <p class="lead">O log precisa ajudar a investigar. Ele nao deve expor senha, token, documento ou informacao sensivel.</p>
+            </div>
+            <div class="pager"><a href="#slide-06">Anterior</a><span>07 / 20</span><a href="#slide-08">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-08">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">08</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">metricas / comportamento ao longo do tempo</span><span class="status">series</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Metricas mostram padroes</h2>
+              <div class="grid-2">
+                <div class="tile">
+                  <h3>Requisicoes por minuto</h3>
+                  <div class="bars">
+                    <div class="bar" style="height: 42%"></div><div class="bar" style="height: 56%"></div><div class="bar" style="height: 48%"></div><div class="bar" style="height: 62%"></div><div class="bar warn" style="height: 74%"></div><div class="bar warn" style="height: 81%"></div><div class="bar bad" style="height: 96%"></div><div class="bar warn" style="height: 78%"></div><div class="bar" style="height: 61%"></div><div class="bar" style="height: 54%"></div><div class="bar" style="height: 45%"></div><div class="bar" style="height: 39%"></div>
+                  </div>
+                </div>
+                <div class="tile">
+                  <h3>O que observar</h3>
+                  <ul class="list">
+                    <li>Quantidade de chamadas.</li>
+                    <li>Tempo de resposta.</li>
+                    <li>Status HTTP.</li>
+                    <li>Memoria, CPU e JVM.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-07">Anterior</a><span>08 / 20</span><a href="#slide-09">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-09">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">09</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">traces / caminho da requisicao</span><span class="status">span view</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Trace mostra onde o tempo foi gasto</h2>
+              <pre class="terminal">POST /api/v1/orders                  920ms
+  gateway-service                     24ms
+  orders-service                     318ms
+    validation                         6ms
+    MongoDB save                     287ms
+  RabbitMQ publish                    41ms
+  response mapping                     9ms</pre>
+              <p class="lead">Nesta aula vamos focar em logs, health e metricas. Tracing fica como evolucao natural quando houver varios servicos conversando.</p>
+            </div>
+            <div class="pager"><a href="#slide-08">Anterior</a><span>09 / 20</span><a href="#slide-10">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-10">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">10</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">actuator / endpoints operacionais</span><span class="status">spring boot</span></div>
+            <div class="content">
+              <h2 class="title-lg">Spring Boot Actuator</h2>
+              <p class="big">A aplicacao passa a expor informacoes operacionais.</p>
+              <div class="grid-3">
+                <div class="tile"><h3>/actuator/health</h3><p>Mostra se a aplicacao e suas dependencias estao saudaveis.</p></div>
+                <div class="tile"><h3>/actuator/metrics</h3><p>Permite inspecionar metricas internas pela propria API.</p></div>
+                <div class="tile"><h3>/actuator/prometheus</h3><p>Entrega metricas no formato que o Prometheus coleta.</p></div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-09">Anterior</a><span>10 / 20</span><a href="#slide-11">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-11">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">11</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">health / pronto para receber trafego</span><span class="status">UP</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Health check nao e enfeite</h2>
+              <div class="grid-2">
+                <div class="tile metric"><span>application</span><strong style="color: var(--green)">UP</strong><b class="delta good">respondendo</b></div>
+                <div class="tile metric"><span>mongodb</span><strong style="color: var(--green)">UP</strong><b class="delta good">conectado</b></div>
+              </div>
+              <p class="lead">Uma aplicacao pode estar com o processo em execucao e mesmo assim nao conseguir trabalhar. O health check ajuda a enxergar isso.</p>
+            </div>
+            <div class="pager"><a href="#slide-10">Anterior</a><span>11 / 20</span><a href="#slide-12">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-12">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">12</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">micrometer / camada de metricas</span><span class="status">registry</span></div>
+            <div class="content">
+              <h2 class="title-lg">Micrometer organiza as metricas</h2>
+              <div class="grid-3">
+                <div class="tile"><h3>Spring Web</h3><p>Gera metricas de requisicoes HTTP automaticamente.</p></div>
+                <div class="tile"><h3>JVM</h3><p>Exibe memoria, threads, garbage collector e uso do processo.</p></div>
+                <div class="tile"><h3>Prometheus registry</h3><p>Converte as metricas para o formato coletado pelo Prometheus.</p></div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-11">Anterior</a><span>12 / 20</span><a href="#slide-13">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-13">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">13</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">prometheus / scrape</span><span class="status">pull model</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Prometheus coleta, nao recebe</h2>
+              <pre class="terminal">scrape_configs:
+  - job_name: observability-api
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:8080</pre>
+              <p class="lead">A cada intervalo, o Prometheus chama a API e guarda as metricas. Depois conseguimos consultar historico e montar dashboards.</p>
+            </div>
+            <div class="pager"><a href="#slide-12">Anterior</a><span>13 / 20</span><a href="#slide-14">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-14">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">14</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">dashboard / leitura operacional</span><span class="status">visualizando</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Dashboard bom responde pergunta</h2>
+              <div class="grid-3">
+                <div class="tile metric"><span>req/s</span><strong>128</strong><b class="delta good">normal</b><div class="spark"></div></div>
+                <div class="tile metric"><span>p95</span><strong>740ms</strong><b class="delta warn">subindo</b><div class="spark"></div></div>
+                <div class="tile metric"><span>5xx</span><strong>1.2%</strong><b class="delta bad">investigar</b><div class="spark"></div></div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-13">Anterior</a><span>14 / 20</span><a href="#slide-15">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-15">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">15</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">sinais de negocio / alem da infraestrutura</span><span class="status">domain metrics</span></div>
+            <div class="content">
+              <h2 class="title-lg">Nao observe so CPU e memoria</h2>
+              <p class="big">A aplicacao existe para executar uma regra de negocio.</p>
+              <div class="grid-3">
+                <div class="tile"><h3>Pedidos criados</h3><p>Mostra se o fluxo principal esta acontecendo.</p></div>
+                <div class="tile"><h3>Pedidos com erro</h3><p>Mostra impacto real para o usuario.</p></div>
+                <div class="tile"><h3>Eventos publicados</h3><p>Mostra se a integracao continua ativa.</p></div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-14">Anterior</a><span>15 / 20</span><a href="#slide-16">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-16">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">16</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">alertas / menos ruido mais acao</span><span class="status">routing</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Alerta precisa pedir acao</h2>
+              <div class="grid-2">
+                <div class="tile"><h3>Ruim</h3><p>Dispara toda hora, ninguem olha, nao indica o que fazer.</p></div>
+                <div class="tile"><h3>Bom</h3><p>Mostra impacto, gravidade e aponta o primeiro lugar para investigar.</p></div>
+              </div>
+              <div class="heatmap">
+                <div class="cell"></div><div class="cell"></div><div class="cell mid"></div><div class="cell"></div><div class="cell"></div><div class="cell hot"></div><div class="cell hot"></div><div class="cell mid"></div><div class="cell"></div><div class="cell"></div><div class="cell mid"></div><div class="cell"></div>
+                <div class="cell"></div><div class="cell mid"></div><div class="cell mid"></div><div class="cell"></div><div class="cell hot"></div><div class="cell hot"></div><div class="cell mid"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-15">Anterior</a><span>16 / 20</span><a href="#slide-17">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-17">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">17</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">erros comuns / anti padroes</span><span class="status">review</span></div>
+            <div class="content">
+              <h2 class="title-lg">Erros comuns</h2>
+              <ul class="list">
+                <li>Achar que log sozinho resolve observabilidade.</li>
+                <li>Expor todos os endpoints do Actuator sem cuidado.</li>
+                <li>Criar alertas para tudo e cansar a equipe.</li>
+                <li>Registrar dados sensiveis em log.</li>
+                <li>Esperar metricas sem gerar trafego na API.</li>
+              </ul>
+            </div>
+            <div class="pager"><a href="#slide-16">Anterior</a><span>17 / 20</span><a href="#slide-18">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-18">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">18</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">pratica / o que o tutorial implementa</span><span class="status">hands on</span></div>
+            <div class="content">
+              <h2 class="title-lg">No tutorial pratico</h2>
+              <div class="grid-2">
+                <div class="tile"><h3>API de pedidos</h3><p>Controller, service, repository, model, DTO e mapper para gerar comportamento real.</p></div>
+                <div class="tile"><h3>Observabilidade basica</h3><p>Actuator, health, metricas Prometheus, logs com SLF4J e Prometheus em Docker.</p></div>
+              </div>
+              <pre class="terminal">POST /api/v1/orders
+GET  /actuator/health
+GET  /actuator/metrics
+GET  /actuator/prometheus</pre>
+            </div>
+            <div class="pager"><a href="#slide-17">Anterior</a><span>18 / 20</span><a href="#slide-19">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-19">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">19</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">evolucao / depois da base</span><span class="status">roadmap</span></div>
+            <div class="content">
+              <h2 class="title-lg">Depois da base</h2>
+              <p class="big">Quando health, logs e metricas fizerem sentido, tracing passa a ser o proximo passo.</p>
+              <ul class="list">
+                <li>Correlacionar requisicoes entre microsservicos.</li>
+                <li>Usar OpenTelemetry para padronizar coleta.</li>
+                <li>Montar dashboards com historico e comparacao.</li>
+                <li>Definir alertas baseados em impacto real.</li>
+              </ul>
+            </div>
+            <div class="pager"><a href="#slide-18">Anterior</a><span>19 / 20</span><a href="#slide-20">Proximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-20">
+        <article class="frame">
+          <aside class="rail"><div class="mark">O</div><div class="rail-dot active">20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">resumo / leitura final</span><span class="status">complete</span></div>
+            <div class="content">
+              <h2 class="title-lg">Resumo</h2>
+              <div class="grid-3">
+                <div class="tile"><h3>Monitoramento</h3><p>Mostra que algo saiu do esperado.</p></div>
+                <div class="tile"><h3>Observabilidade</h3><p>Ajuda a descobrir por que aquilo aconteceu.</p></div>
+                <div class="tile"><h3>Spring Boot</h3><p>Actuator, Micrometer e Prometheus formam uma boa primeira base.</p></div>
+              </div>
+              <div class="callout">A meta nao e ter painel bonito. A meta e conseguir investigar melhor quando o sistema se comporta de forma estranha.</div>
+            </div>
+            <div class="pager"><a href="#slide-19">Anterior</a><span>20 / 20</span><a href="#slide-01">Inicio</a></div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
