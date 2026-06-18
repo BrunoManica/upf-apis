@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Slides - Revisão das Aulas 1 a 6</title>
+    <style>
+      :root {
+        --bg: #07111f;
+        --surface: #0d1b2d;
+        --surface-2: #12243a;
+        --surface-3: #182e48;
+        --border: #29445f;
+        --text: #f4f7fb;
+        --muted: #a9bbcc;
+        --blue: #59b7ff;
+        --cyan: #5eead4;
+        --yellow: #f8d66d;
+        --orange: #ff9b5e;
+        --green: #7ee0a1;
+        --purple: #c4a7ff;
+        --red: #ff7b86;
+        --surface-width: min(1160px, calc(100vw - 34px));
+        --header-height: 66px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 10% 10%, rgba(89, 183, 255, 0.16), transparent 25%),
+          radial-gradient(circle at 90% 25%, rgba(196, 167, 255, 0.12), transparent 24%),
+          linear-gradient(180deg, #09182a 0%, var(--bg) 60%, #040a12 100%);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial,
+          sans-serif;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        min-height: var(--header-height);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(7, 17, 31, 0.92);
+        backdrop-filter: blur(18px);
+      }
+
+      .topbar-inner {
+        width: var(--surface-width);
+        min-height: var(--header-height);
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 250px 1fr;
+        gap: 16px;
+        align-items: center;
+      }
+
+      .brand {
+        min-width: 0;
+        display: grid;
+        gap: 3px;
+      }
+
+      .brand strong {
+        color: var(--cyan);
+        font-size: 0.94rem;
+      }
+
+      .brand span {
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .topnav {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding: 10px 0;
+      }
+
+      .topnav a {
+        flex: 0 0 auto;
+        min-width: 38px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        font-size: 0.8rem;
+        font-weight: 800;
+      }
+
+      .topnav a:hover {
+        color: var(--text);
+        border-color: var(--cyan);
+        background: var(--surface-3);
+      }
+
+      .deck {
+        padding: 18px 0 30px;
+      }
+
+      .slide {
+        min-height: calc(100vh - var(--header-height));
+        padding: 14px 0;
+        scroll-margin-top: calc(var(--header-height) + 10px);
+        display: grid;
+        place-items: center;
+      }
+
+      .frame {
+        width: var(--surface-width);
+        min-height: min(720px, calc(100vh - var(--header-height) - 48px));
+        display: grid;
+        grid-template-columns: 88px 1fr;
+        overflow: hidden;
+        background: rgba(13, 27, 45, 0.96);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.44);
+      }
+
+      .rail {
+        padding: 18px 12px;
+        display: grid;
+        align-content: start;
+        justify-items: center;
+        gap: 13px;
+        background: #091727;
+        border-right: 1px solid var(--border);
+      }
+
+      .mark {
+        width: 44px;
+        height: 44px;
+        display: grid;
+        place-items: center;
+        color: #04111c;
+        background: linear-gradient(135deg, var(--cyan), var(--blue));
+        border-radius: 10px;
+        font-weight: 950;
+      }
+
+      .rail-label {
+        color: var(--muted);
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+      }
+
+      .rail-number {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        color: var(--text);
+        border: 1px solid var(--cyan);
+        border-radius: 9px;
+        font-size: 0.8rem;
+        font-weight: 900;
+        background: rgba(94, 234, 212, 0.08);
+      }
+
+      .workspace {
+        min-width: 0;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+      }
+
+      .panelbar {
+        min-height: 54px;
+        padding: 0 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        border-bottom: 1px solid var(--border);
+        background: #0a192a;
+      }
+
+      .crumb {
+        min-width: 0;
+        color: var(--muted);
+        font-size: 0.86rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .status {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--green);
+        font-size: 0.8rem;
+        font-weight: 800;
+      }
+
+      .status::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 13px rgba(126, 224, 161, 0.7);
+      }
+
+      .content {
+        padding: 34px;
+        display: grid;
+        align-content: center;
+        gap: 24px;
+      }
+
+      .content.top {
+        align-content: start;
+      }
+
+      .kicker {
+        width: fit-content;
+        padding: 7px 11px;
+        color: var(--cyan);
+        background: rgba(94, 234, 212, 0.08);
+        border: 1px solid rgba(94, 234, 212, 0.35);
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 850;
+      }
+
+      .title-xl {
+        max-width: 14ch;
+        font-size: clamp(2.8rem, 7vw, 5.7rem);
+        line-height: 0.96;
+        letter-spacing: -0.055em;
+      }
+
+      .title-lg {
+        max-width: 18ch;
+        font-size: clamp(2rem, 4.5vw, 4rem);
+        line-height: 1;
+        letter-spacing: -0.04em;
+      }
+
+      .lead {
+        max-width: 72ch;
+        color: var(--muted);
+        font-size: clamp(1rem, 1.8vw, 1.3rem);
+        line-height: 1.55;
+      }
+
+      .big {
+        max-width: 29ch;
+        font-size: clamp(1.45rem, 3vw, 2.5rem);
+        line-height: 1.25;
+        font-weight: 750;
+      }
+
+      .grid-2,
+      .grid-3,
+      .grid-6 {
+        display: grid;
+        gap: 15px;
+      }
+
+      .grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .grid-6 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .card {
+        min-width: 0;
+        padding: 20px;
+        display: grid;
+        align-content: start;
+        gap: 10px;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+      }
+
+      .card h3 {
+        color: var(--cyan);
+        font-size: 1.08rem;
+      }
+
+      .card p {
+        color: var(--muted);
+        line-height: 1.48;
+      }
+
+      .lesson-card {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .lesson-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        background: var(--lesson-color, var(--cyan));
+      }
+
+      .lesson-number {
+        color: var(--lesson-color, var(--cyan));
+        font-size: 0.76rem;
+        font-weight: 900;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .list {
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 12px;
+        list-style: none;
+      }
+
+      .list li {
+        padding: 13px 15px;
+        color: var(--muted);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-left: 4px solid var(--blue);
+        border-radius: 8px;
+        line-height: 1.45;
+      }
+
+      .list strong {
+        color: var(--text);
+      }
+
+      .callout {
+        padding: 18px 20px;
+        color: #dffdf8;
+        background: rgba(94, 234, 212, 0.08);
+        border: 1px solid rgba(94, 234, 212, 0.38);
+        border-radius: 10px;
+        font-size: 1.08rem;
+        line-height: 1.5;
+      }
+
+      .terminal {
+        margin: 0;
+        padding: 20px;
+        overflow-x: auto;
+        color: #c8f8e9;
+        background: #040b12;
+        border: 1px solid #27445d;
+        border-radius: 10px;
+        font:
+          0.95rem/1.6 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        white-space: pre;
+      }
+
+      .architecture {
+        display: grid;
+        grid-template-columns: 1fr auto 1.15fr auto 1fr;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .arch-node {
+        min-height: 92px;
+        padding: 16px;
+        display: grid;
+        place-items: center;
+        gap: 5px;
+        text-align: center;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+      }
+
+      .arch-node strong {
+        color: var(--cyan);
+      }
+
+      .arch-node span {
+        color: var(--muted);
+        font-size: 0.84rem;
+      }
+
+      .arch-arrow {
+        color: var(--yellow);
+        font-size: 1.6rem;
+        font-weight: 900;
+      }
+
+      .stack {
+        display: grid;
+        gap: 9px;
+      }
+
+      .stack-row {
+        padding: 14px 16px;
+        display: grid;
+        grid-template-columns: 190px 1fr;
+        gap: 18px;
+        align-items: center;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+
+      .stack-row strong {
+        color: var(--cyan);
+      }
+
+      .stack-row span {
+        color: var(--muted);
+      }
+
+      .question {
+        padding: 18px;
+        color: var(--text);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        font-size: 1rem;
+        line-height: 1.45;
+      }
+
+      .question b {
+        color: var(--yellow);
+      }
+
+      .pager {
+        min-height: 54px;
+        padding: 0 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+        background: #0a192a;
+        font-size: 0.84rem;
+        font-weight: 800;
+      }
+
+      .pager a {
+        padding: 8px 11px;
+        color: var(--text);
+        background: var(--surface-3);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+      }
+
+      .pager a:hover {
+        border-color: var(--cyan);
+      }
+
+      @media (max-width: 920px) {
+        .topbar-inner,
+        .grid-2,
+        .grid-3,
+        .grid-6,
+        .architecture {
+          grid-template-columns: 1fr;
+        }
+
+        .slide {
+          min-height: auto;
+        }
+
+        .frame {
+          min-height: auto;
+          grid-template-columns: 1fr;
+        }
+
+        .rail {
+          display: none;
+        }
+
+        .content {
+          padding: 24px;
+        }
+
+        .arch-arrow {
+          transform: rotate(90deg);
+          text-align: center;
+        }
+      }
+
+      @media (max-width: 560px) {
+        :root {
+          --surface-width: calc(100vw - 18px);
+        }
+
+        .panelbar,
+        .pager {
+          padding: 0 14px;
+        }
+
+        .content {
+          padding: 18px;
+        }
+
+        .stack-row {
+          grid-template-columns: 1fr;
+          gap: 5px;
+        }
+      }
+
+      @media print {
+        .topbar {
+          display: none;
+        }
+
+        body {
+          background: #fff;
+        }
+
+        .deck {
+          padding: 0;
+        }
+
+        .slide {
+          min-height: 100vh;
+          break-after: page;
+          padding: 0;
+        }
+
+        .frame {
+          width: 100%;
+          min-height: 100vh;
+          border: 0;
+          border-radius: 0;
+          box-shadow: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <strong>UPF APIs</strong>
+          <span>Revisão das Aulas 1 a 6 · Slides</span>
+        </div>
+        <nav class="topnav" aria-label="Mapa dos slides">
+          <a href="#slide-01">01</a><a href="#slide-02">02</a><a href="#slide-03">03</a>
+          <a href="#slide-04">04</a><a href="#slide-05">05</a><a href="#slide-06">06</a>
+          <a href="#slide-07">07</a><a href="#slide-08">08</a><a href="#slide-09">09</a>
+          <a href="#slide-10">10</a><a href="#slide-11">11</a><a href="#slide-12">12</a>
+          <a href="#slide-13">13</a><a href="#slide-14">14</a><a href="#slide-15">15</a>
+          <a href="#slide-16">16</a><a href="#slide-17">17</a><a href="#slide-18">18</a>
+          <a href="#slide-19">19</a><a href="#slide-20">20</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="deck">
+      <section class="slide" id="slide-01">
+        <article class="frame">
+          <aside class="rail"><div class="mark">R</div><div class="rail-number">01</div><span class="rail-label">revisão</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">upf-apis / checkpoint / aulas-1-a-6</span><span class="status">pronto</span></div>
+            <div class="content">
+              <span class="kicker">Checkpoint de aprendizagem</span>
+              <h1 class="title-xl">Revisão das Aulas 1 a 6</h1>
+              <p class="lead">Docker, APIs REST, Spring Boot, SOLID, API Gateway, RabbitMQ e observabilidade conectados em uma única visão.</p>
+            </div>
+            <div class="pager"><span>01 / 20</span><a href="#slide-02">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-02">
+        <article class="frame">
+          <aside class="rail"><div class="mark">R</div><div class="rail-number">02</div><span class="rail-label">objetivo</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">revisão / objetivo</span><span class="status">conectando</span></div>
+            <div class="content">
+              <h2 class="title-lg">O que precisamos enxergar</h2>
+              <p class="big">Cada aula apresentou uma peça. Agora precisamos entender como as peças trabalham juntas.</p>
+              <div class="callout">A meta não é decorar ferramentas. É saber qual problema cada ferramenta resolve dentro de uma API ou arquitetura de microsserviços.</div>
+            </div>
+            <div class="pager"><a href="#slide-01">Anterior</a><span>02 / 20</span><a href="#slide-03">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-03">
+        <article class="frame">
+          <aside class="rail"><div class="mark">R</div><div class="rail-number">03</div><span class="rail-label">mapa</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">revisão / mapa das aulas</span><span class="status">6 módulos</span></div>
+            <div class="content top">
+              <h2 class="title-lg">O caminho até aqui</h2>
+              <div class="grid-6">
+                <div class="card lesson-card" style="--lesson-color: var(--blue)"><span class="lesson-number">Aula 1</span><h3>Docker</h3><p>Onde a aplicação e suas dependências rodam.</p></div>
+                <div class="card lesson-card" style="--lesson-color: var(--cyan)"><span class="lesson-number">Aula 2</span><h3>APIs REST</h3><p>Como sistemas se comunicam por HTTP.</p></div>
+                <div class="card lesson-card" style="--lesson-color: var(--purple)"><span class="lesson-number">Aula 3</span><h3>SOLID</h3><p>Como manter o código organizado e modificável.</p></div>
+                <div class="card lesson-card" style="--lesson-color: var(--yellow)"><span class="lesson-number">Aula 4</span><h3>Gateway</h3><p>Como organizar a entrada de vários serviços.</p></div>
+                <div class="card lesson-card" style="--lesson-color: var(--orange)"><span class="lesson-number">Aula 5</span><h3>RabbitMQ</h3><p>Como serviços trocam eventos sem acoplamento direto.</p></div>
+                <div class="card lesson-card" style="--lesson-color: var(--green)"><span class="lesson-number">Aula 6</span><h3>Observabilidade</h3><p>Como entender o sistema enquanto ele executa.</p></div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-02">Anterior</a><span>03 / 20</span><a href="#slide-04">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-04">
+        <article class="frame">
+          <aside class="rail"><div class="mark">1</div><div class="rail-number">04</div><span class="rail-label">docker</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">aula-1 / containers e máquinas virtuais</span><span class="status">isolamento</span></div>
+            <div class="content">
+              <span class="kicker">Aula 1</span>
+              <h2 class="title-lg">Container não é máquina virtual</h2>
+              <div class="grid-2">
+                <div class="card"><h3>Máquina virtual</h3><p>Simula uma máquina completa e possui seu próprio sistema operacional.</p></div>
+                <div class="card"><h3>Container</h3><p>Isola a aplicação e suas dependências, mas compartilha o kernel do sistema hospedeiro.</p></div>
+              </div>
+              <div class="callout">Docker ajuda a executar aplicações e dependências de forma previsível em máquinas diferentes.</div>
+            </div>
+            <div class="pager"><a href="#slide-03">Anterior</a><span>04 / 20</span><a href="#slide-05">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-05">
+        <article class="frame">
+          <aside class="rail"><div class="mark">1</div><div class="rail-number">05</div><span class="rail-label">compose</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">aula-1 / docker compose</span><span class="status">ambiente local</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Por que usamos Docker Compose?</h2>
+              <pre class="terminal">Aplicação Spring Boot
+├── MongoDB
+├── RabbitMQ
+└── Prometheus</pre>
+              <ul class="list">
+                <li><strong>Um arquivo:</strong> descreve os containers, portas, volumes e variáveis.</li>
+                <li><strong>Um comando:</strong> sobe várias dependências do ambiente local.</li>
+                <li><strong>Volume nomeado:</strong> preserva dados mesmo quando o container é recriado.</li>
+              </ul>
+            </div>
+            <div class="pager"><a href="#slide-04">Anterior</a><span>05 / 20</span><a href="#slide-06">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-06">
+        <article class="frame">
+          <aside class="rail"><div class="mark">2</div><div class="rail-number">06</div><span class="rail-label">rest</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">aula-2 / contrato http</span><span class="status">api rest</span></div>
+            <div class="content">
+              <span class="kicker">Aula 2</span>
+              <h2 class="title-lg">API é um contrato</h2>
+              <div class="grid-3">
+                <div class="card"><h3>GET</h3><p>Lê um recurso e normalmente retorna <strong>200 OK</strong>.</p></div>
+                <div class="card"><h3>POST</h3><p>Cria um recurso e normalmente retorna <strong>201 Created</strong>.</p></div>
+                <div class="card"><h3>DELETE</h3><p>Remove um recurso e pode retornar <strong>204 No Content</strong>.</p></div>
+              </div>
+              <p class="lead">Rotas, métodos, status e formato dos dados precisam comunicar claramente o resultado para quem consome a API.</p>
+            </div>
+            <div class="pager"><a href="#slide-05">Anterior</a><span>06 / 20</span><a href="#slide-07">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-07">
+        <article class="frame">
+          <aside class="rail"><div class="mark">2</div><div class="rail-number">07</div><span class="rail-label">camadas</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">aula-2 / estrutura spring boot</span><span class="status">responsabilidades</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Cada camada tem um trabalho</h2>
+              <div class="architecture">
+                <div class="arch-node"><strong>Controller</strong><span>recebe HTTP e valida entrada</span></div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-node"><strong>Service</strong><span>aplica regra de negócio</span></div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-node"><strong>Repository</strong><span>acessa o MongoDB</span></div>
+              </div>
+              <div class="grid-3">
+                <div class="card"><h3>DTO</h3><p>Define os dados que entram ou saem da API.</p></div>
+                <div class="card"><h3>Mapper</h3><p>Converte model e DTO sem colocar essa lógica no controller.</p></div>
+                <div class="card"><h3>Model</h3><p>Representa o documento persistido no MongoDB.</p></div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-06">Anterior</a><span>07 / 20</span><a href="#slide-08">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-08">
+        <article class="frame">
+          <aside class="rail"><div class="mark">3</div><div class="rail-number">08</div><span class="rail-label">solid</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">aula-3 / princípios solid</span><span class="status">manutenção</span></div>
+            <div class="content">
+              <span class="kicker">Aula 3</span>
+              <h2 class="title-lg">SOLID resolve problemas de mudança</h2>
+              <ul class="list">
+                <li><strong>Responsabilidade:</strong> uma classe não deve tentar fazer tudo.</li>
+                <li><strong>Evolução:</strong> uma mudança pequena não deveria quebrar várias partes.</li>
+                <li><strong>Dependências:</strong> abstrações ajudam quando existe necessidade real de trocar implementações.</li>
+                <li><strong>Pragmatismo:</strong> organização não significa criar camadas e interfaces sem motivo.</li>
+              </ul>
+            </div>
+            <div class="pager"><a href="#slide-07">Anterior</a><span>08 / 20</span><a href="#slide-09">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-09">
+        <article class="frame">
+          <aside class="rail"><div class="mark">3</div><div class="rail-number">09</div><span class="rail-label">prática</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">aula-3 / solid no projeto</span><span class="status">código limpo</span></div>
+            <div class="content">
+              <h2 class="title-lg">Como SOLID apareceu na API</h2>
+              <div class="grid-3">
+                <div class="card"><h3>Controller fino</h3><p>Não calcula, não busca manualmente em listas e não acessa o banco.</p></div>
+                <div class="card"><h3>Service focado</h3><p>Concentra a regra e coordena repository, mapper e integrações.</p></div>
+                <div class="card"><h3>Contrato separado</h3><p>DTO impede que detalhes internos do model vazem pela API.</p></div>
+              </div>
+              <div class="callout">A simplicidade vem de escolher um problema pequeno, não de misturar responsabilidades no mesmo arquivo.</div>
+            </div>
+            <div class="pager"><a href="#slide-08">Anterior</a><span>09 / 20</span><a href="#slide-10">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-10">
+        <article class="frame">
+          <aside class="rail"><div class="mark">4</div><div class="rail-number">10</div><span class="rail-label">gateway</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">aula-4 / porta de entrada</span><span class="status">roteando</span></div>
+            <div class="content top">
+              <span class="kicker">Aula 4</span>
+              <h2 class="title-lg">Uma entrada para vários serviços</h2>
+              <div class="architecture">
+                <div class="arch-node"><strong>Cliente</strong><span>conhece uma URL</span></div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-node"><strong>API Gateway</strong><span>analisa a rota</span></div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-node"><strong>Microsserviço</strong><span>executa a regra</span></div>
+              </div>
+              <pre class="terminal">localhost:8080/api/users    → users-service
+localhost:8080/api/products → products-service
+localhost:8080/api/orders   → orders-service</pre>
+            </div>
+            <div class="pager"><a href="#slide-09">Anterior</a><span>10 / 20</span><a href="#slide-11">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-11">
+        <article class="frame">
+          <aside class="rail"><div class="mark">4</div><div class="rail-number">11</div><span class="rail-label">limites</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">aula-4 / responsabilidade do gateway</span><span class="status">fronteiras</span></div>
+            <div class="content">
+              <h2 class="title-lg">O gateway organiza, mas não decide o negócio</h2>
+              <div class="grid-2">
+                <div class="card"><h3>Faz sentido no gateway</h3><p>Roteamento, autenticação, rate limiting, cache e regras transversais.</p></div>
+                <div class="card"><h3>Não faz sentido no gateway</h3><p>Calcular pedido, validar estoque ou decidir regras específicas de usuário e produto.</p></div>
+              </div>
+              <div class="callout">Regra de negócio continua no serviço responsável pelo domínio.</div>
+            </div>
+            <div class="pager"><a href="#slide-10">Anterior</a><span>11 / 20</span><a href="#slide-12">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-12">
+        <article class="frame">
+          <aside class="rail"><div class="mark">5</div><div class="rail-number">12</div><span class="rail-label">rabbitmq</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">aula-5 / comunicação assíncrona</span><span class="status">evento publicado</span></div>
+            <div class="content top">
+              <span class="kicker">Aula 5</span>
+              <h2 class="title-lg">Nem tudo precisa acontecer por HTTP</h2>
+              <div class="architecture">
+                <div class="arch-node"><strong>orders-service</strong><span>publica pedido.criado</span></div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-node"><strong>RabbitMQ</strong><span>roteia e armazena</span></div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-node"><strong>notifications-service</strong><span>consome o evento</span></div>
+              </div>
+              <p class="lead">O serviço de pedidos comunica que algo aconteceu sem conhecer diretamente quem vai reagir.</p>
+            </div>
+            <div class="pager"><a href="#slide-11">Anterior</a><span>12 / 20</span><a href="#slide-13">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-13">
+        <article class="frame">
+          <aside class="rail"><div class="mark">5</div><div class="rail-number">13</div><span class="rail-label">conceitos</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">aula-5 / peças da mensageria</span><span class="status">broker ativo</span></div>
+            <div class="content">
+              <h2 class="title-lg">Quem faz o quê no RabbitMQ?</h2>
+              <div class="grid-3">
+                <div class="card"><h3>Producer</h3><p>Publica a mensagem quando algo acontece.</p></div>
+                <div class="card"><h3>Exchange</h3><p>Recebe a mensagem e decide para onde encaminhar.</p></div>
+                <div class="card"><h3>Routing key</h3><p>Ajuda o exchange a escolher o destino.</p></div>
+                <div class="card"><h3>Binding</h3><p>Liga uma fila a um exchange.</p></div>
+                <div class="card"><h3>Queue</h3><p>Mantém a mensagem até o processamento.</p></div>
+                <div class="card"><h3>Consumer</h3><p>Recebe e processa a mensagem da fila.</p></div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-12">Anterior</a><span>13 / 20</span><a href="#slide-14">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-14">
+        <article class="frame">
+          <aside class="rail"><div class="mark">5</div><div class="rail-number">14</div><span class="rail-label">decisão</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">aula-5 / http evento rpc</span><span class="status">escolha técnica</span></div>
+            <div class="content">
+              <h2 class="title-lg">HTTP, evento ou RPC?</h2>
+              <div class="grid-3">
+                <div class="card"><h3>HTTP</h3><p>Use quando precisa de uma resposta imediata e direta.</p></div>
+                <div class="card"><h3>Evento</h3><p>Use para avisar que algo aconteceu, como <strong>pedido.criado</strong>.</p></div>
+                <div class="card"><h3>RPC</h3><p>Use com cuidado quando precisa perguntar algo por mensageria e esperar resposta.</p></div>
+              </div>
+              <div class="callout">RabbitMQ não substitui HTTP. A escolha depende do tipo de comunicação necessário.</div>
+            </div>
+            <div class="pager"><a href="#slide-13">Anterior</a><span>14 / 20</span><a href="#slide-15">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-15">
+        <article class="frame">
+          <aside class="rail"><div class="mark">6</div><div class="rail-number">15</div><span class="rail-label">sinais</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">aula-6 / observabilidade</span><span class="status">investigando</span></div>
+            <div class="content">
+              <span class="kicker">Aula 6</span>
+              <h2 class="title-lg">Trocar chute por dados</h2>
+              <div class="grid-3">
+                <div class="card"><h3>Logs</h3><p>Contam eventos com contexto: pedido criado, falha, timeout ou validação.</p></div>
+                <div class="card"><h3>Métricas</h3><p>Mostram números ao longo do tempo: latência, erros, CPU e memória.</p></div>
+                <div class="card"><h3>Traces</h3><p>Mostram o caminho de uma requisição entre serviços e dependências.</p></div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-14">Anterior</a><span>15 / 20</span><a href="#slide-16">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-16">
+        <article class="frame">
+          <aside class="rail"><div class="mark">6</div><div class="rail-number">16</div><span class="rail-label">actuator</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">aula-6 / actuator micrometer prometheus</span><span class="status">UP</span></div>
+            <div class="content top">
+              <h2 class="title-lg">A base de observabilidade no Spring Boot</h2>
+              <div class="grid-3">
+                <div class="card"><h3>Actuator</h3><p>Expõe endpoints operacionais, como health e métricas.</p></div>
+                <div class="card"><h3>Micrometer</h3><p>Organiza e publica métricas da aplicação e da JVM.</p></div>
+                <div class="card"><h3>Prometheus</h3><p>Coleta as métricas periodicamente e guarda seu histórico.</p></div>
+              </div>
+              <pre class="terminal">GET /actuator/health
+GET /actuator/metrics
+GET /actuator/prometheus</pre>
+            </div>
+            <div class="pager"><a href="#slide-15">Anterior</a><span>16 / 20</span><a href="#slide-17">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-17">
+        <article class="frame">
+          <aside class="rail"><div class="mark">R</div><div class="rail-number">17</div><span class="rail-label">arquitetura</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">revisão / arquitetura completa</span><span class="status">integrado</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Agora as peças se conectam</h2>
+              <pre class="terminal">Cliente
+  └── API Gateway
+      ├── users-service
+      ├── products-service
+      └── orders-service
+          ├── MongoDB
+          └── RabbitMQ
+              └── notifications-service
+
+Todos: containers + logs + health checks + métricas</pre>
+              <p class="lead">Cada componente resolve um problema específico. A arquitetura funciona porque as responsabilidades continuam separadas.</p>
+            </div>
+            <div class="pager"><a href="#slide-16">Anterior</a><span>17 / 20</span><a href="#slide-18">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-18">
+        <article class="frame">
+          <aside class="rail"><div class="mark">R</div><div class="rail-number">18</div><span class="rail-label">problema</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">revisão / ferramenta e problema</span><span class="status">raciocínio</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Qual problema estou tentando resolver?</h2>
+              <div class="stack">
+                <div class="stack-row"><strong>Ambiente inconsistente</strong><span>Docker e Docker Compose</span></div>
+                <div class="stack-row"><strong>Comunicação HTTP</strong><span>API REST com contrato claro</span></div>
+                <div class="stack-row"><strong>Código difícil de mudar</strong><span>Camadas e princípios SOLID</span></div>
+                <div class="stack-row"><strong>Muitos endereços externos</strong><span>API Gateway</span></div>
+                <div class="stack-row"><strong>Acoplamento entre serviços</strong><span>Eventos com RabbitMQ</span></div>
+                <div class="stack-row"><strong>Falhas difíceis de investigar</strong><span>Observabilidade</span></div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-17">Anterior</a><span>18 / 20</span><a href="#slide-19">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-19">
+        <article class="frame">
+          <aside class="rail"><div class="mark">?</div><div class="rail-number">19</div><span class="rail-label">checkpoint</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">revisão / perguntas rápidas</span><span class="status">validação</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Você consegue explicar?</h2>
+              <div class="grid-2">
+                <div class="question"><b>01.</b> Qual é a diferença entre container e máquina virtual?</div>
+                <div class="question"><b>02.</b> Por que a regra de negócio fica no service?</div>
+                <div class="question"><b>03.</b> Por que DTO e model não são a mesma coisa?</div>
+                <div class="question"><b>04.</b> O que o gateway faz e o que ele não deve fazer?</div>
+                <div class="question"><b>05.</b> Quando um evento faz mais sentido que uma chamada HTTP?</div>
+                <div class="question"><b>06.</b> Qual é a diferença entre log, métrica e health check?</div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-18">Anterior</a><span>19 / 20</span><a href="#slide-20">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-20">
+        <article class="frame">
+          <aside class="rail"><div class="mark">✓</div><div class="rail-number">20</div><span class="rail-label">resumo</span></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">revisão / resumo final</span><span class="status">concluído</span></div>
+            <div class="content">
+              <h2 class="title-lg">A tecnologia vem depois do problema</h2>
+              <div class="grid-3">
+                <div class="card"><h3>Construção</h3><p>Spring Boot, APIs REST, camadas, DTOs, MongoDB e SOLID.</p></div>
+                <div class="card"><h3>Integração</h3><p>API Gateway para entrada e RabbitMQ para eventos.</p></div>
+                <div class="card"><h3>Operação</h3><p>Docker para execução e observabilidade para investigação.</p></div>
+              </div>
+              <div class="callout">Quando você entende o problema, a ferramenta deixa de ser um nome isolado e passa a ser uma escolha técnica consciente.</div>
+            </div>
+            <div class="pager"><a href="#slide-19">Anterior</a><span>20 / 20</span><a href="#slide-01">Início</a></div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
