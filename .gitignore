@@ -25,6 +25,7 @@ wheels/
 *.egg
 
 # Virtual Environment
+.venv/
 venv/
 env/
 ENV/
@@ -41,3 +42,10 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Instruções e configurações locais de agentes
+AGENTS.md
+regras.md
+.agents/
+.codex/
+.cursor/

@@ -28,10 +28,6 @@ site_name: UPF APIs - Aulas
 
 nav:
   - Home: index.md
-  - Revisão Aulas 1 a 6: revisao-aulas-1-a-6.md
-  - Material preparatório — Docker:
-    - Containers vs VMs: aula1/containers-vs-vms.md
-    - Docker: aula1/docker.md
   - Aula 1 — APIs e Microsserviços:
     - APIs: aula2/apis.md
     - Exemplo Prático de API: aula2/exemplo-api.md
