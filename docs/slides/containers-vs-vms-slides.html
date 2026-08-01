@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Slides - Containers, VMs e Docker</title>
+    <title>Aula 1 - Containers, VMs e Docker</title>
     <style>
       :root {
         --night: #07131d;
@@ -832,7 +832,7 @@
             <div class="content">
               <span class="kicker">Aula 1</span>
               <h1 class="title-xl">Containers, VMs e Docker</h1>
-              <p class="lead">Do isolamento de ambientes até uma aplicação empacotada e executada da mesma forma em qualquer máquina.</p>
+              <p class="lead">Do isolamento de ambientes até um MongoDB local descrito e repetido com o mesmo arquivo.</p>
               <div class="hero-compare">
                 <div class="hero-side vm-side">
                   <h3>Máquinas virtuais</h3>
@@ -869,8 +869,8 @@
             <div class="panelbar"><span class="crumb">objetivo / ambiente reproduzível</span><span class="status">manifest loaded</span></div>
             <div class="content">
               <h2 class="title-lg">Objetivo da aula</h2>
-              <p class="big">Entender o isolamento e empacotar uma aplicação sem depender da configuração manual de cada computador.</p>
-              <div class="callout">Vamos comparar bare metal, máquinas virtuais e containers; depois conectar Dockerfile, imagem, container, porta, volume e Docker Compose.</div>
+              <p class="big">Distinguir VMs de containers e preparar o MongoDB que a API de usuários usará na Aula 2.</p>
+              <div class="callout">Vamos comparar as duas formas de isolamento e, depois, usar imagem, container, porta, volume e Docker Compose para iniciar o banco local.</div>
             </div>
             <div class="pager"><a href="#slide-01">Anterior</a><span>02 / 20</span><a href="#slide-03">Próximo</a></div>
           </div>
@@ -881,14 +881,14 @@
         <article class="frame">
           <aside class="rail"><div class="mark">03</div><div class="rail-dot">03 / 20</div></aside>
           <div class="workspace">
-            <div class="panelbar"><span class="crumb">contexto / evolução das aplicações</span><span class="status">cloud native</span></div>
+            <div class="panelbar"><span class="crumb">contexto / ambiente local</span><span class="status">setup repeatable</span></div>
             <div class="content">
-              <h2 class="title-lg">Da TI tradicional para aplicações nativas em nuvem</h2>
+              <h2 class="title-lg">O problema: “na minha máquina funciona”</h2>
               <div class="grid-2">
-                <div class="tile vm"><h3>TI tradicional</h3><p>Aplicações monolíticas, deploy lento, escala vertical e manutenção mais complexa.</p></div>
-                <div class="tile ct"><h3>TI nativa em nuvem</h3><p>Microserviços, deploy automatizado, escala horizontal e ambientes reproduzíveis.</p></div>
+                <div class="tile vm"><h3>Configuração manual</h3><p>Versões, serviços e senhas podem mudar de um computador para outro.</p></div>
+                <div class="tile ct"><h3>Ambiente descrito</h3><p>Um arquivo registra a imagem, a porta e os dados persistentes usados pela turma.</p></div>
               </div>
-              <div class="callout">Containers ajudam nessa mudança porque empacotam a aplicação e suas dependências, reduzindo diferenças entre desenvolvimento, teste e produção.</div>
+              <div class="callout">Docker não elimina todas as diferenças entre sistemas operacionais, mas torna a configuração do serviço repetível por meio do mesmo arquivo.</div>
             </div>
             <div class="pager"><a href="#slide-02">Anterior</a><span>03 / 20</span><a href="#slide-04">Próximo</a></div>
           </div>
@@ -901,13 +901,13 @@
           <div class="workspace">
             <div class="panelbar"><span class="crumb">bare metal / máquina física</span><span class="status">direct hardware</span></div>
             <div class="content">
-              <h2 class="title-lg">Bare metal</h2>
+              <h2 class="title-lg">Uma máquina sem virtualização</h2>
               <div class="stack">
                 <div class="layer app">Aplicações</div>
                 <div class="layer os">Sistema operacional</div>
                 <div class="layer hardware">Hardware físico</div>
               </div>
-              <p class="lead">A aplicação usa o sistema operacional instalado diretamente no hardware. Há poucas camadas, mas os ambientes ficam presos à configuração daquela máquina.</p>
+              <p class="lead">A aplicação usa diretamente o sistema operacional instalado no computador. Essa é a base para entender o que VMs e containers isolam de maneiras diferentes.</p>
             </div>
             <div class="pager"><a href="#slide-03">Anterior</a><span>04 / 20</span><a href="#slide-05">Próximo</a></div>
           </div>
@@ -1018,14 +1018,13 @@
           <div class="workspace">
             <div class="panelbar"><span class="crumb">fluxo / build and run</span><span class="status">pipeline ready</span></div>
             <div class="content">
-              <h2 class="title-lg">Do arquivo à aplicação rodando</h2>
+              <h2 class="title-lg">Imagem e container: a analogia dos bolos</h2>
               <div class="flow">
-                <div class="node hot"><b>Dockerfile</b><br>instruções</div>
-                <div class="node"><b>docker build</b><br>construção</div>
-                <div class="node"><b>Imagem</b><br>template</div>
-                <div class="node"><b>docker run</b><br>container</div>
+                <div class="node hot"><b>Dockerfile</b><br>receita</div>
+                <div class="node"><b>Imagem</b><br>receita pronta</div>
+                <div class="node"><b>Container</b><br>bolo em uso</div>
               </div>
-              <div class="analogy"><strong>Analogia da fábrica</strong>O Dockerfile é o projeto de fabricação, a imagem é o produto embalado e o container é uma unidade aberta e funcionando.</div>
+              <div class="analogy"><strong>Analogia dos bolos</strong>O Dockerfile é a receita; a imagem é o pacote reutilizável preparado a partir dela; o container é uma instância em execução, como o bolo pronto para ser servido.</div>
             </div>
             <div class="pager"><a href="#slide-09">Anterior</a><span>10 / 20</span><a href="#slide-11">Próximo</a></div>
           </div>
@@ -1039,12 +1038,12 @@
             <div class="panelbar"><span class="crumb">dockerfile / receita</span><span class="status">instructions parsed</span></div>
             <div class="content top">
               <h2 class="title-lg">Dockerfile</h2>
-              <pre class="code">FROM nginx:alpine
+              <pre class="code">FROM eclipse-temurin:17-jre
 
-COPY index.html /usr/share/nginx/html/index.html
+COPY build/libs/app.jar app.jar
 
-EXPOSE 80</pre>
-              <p class="lead">A imagem base já contém o servidor web. O arquivo da aplicação é copiado para o diretório publicado pelo Nginx, e a porta 80 documenta onde o serviço atende.</p>
+ENTRYPOINT ["java", "-jar", "app.jar"]</pre>
+              <p class="lead">O Dockerfile descreve os passos para montar uma imagem. Nesta aula usaremos a imagem pronta do MongoDB; na Aula 2, a API Java 17 poderá receber seu próprio Dockerfile.</p>
             </div>
             <div class="pager"><a href="#slide-10">Anterior</a><span>11 / 20</span><a href="#slide-12">Próximo</a></div>
           </div>
@@ -1059,8 +1058,8 @@ EXPOSE 80</pre>
             <div class="content">
               <h2 class="title-lg">Imagem Docker</h2>
               <div class="stack">
-                <div class="layer app">Camada: index.html</div>
-                <div class="layer runtime">Camada: servidor Nginx</div>
+                <div class="layer app">Camada: configuração do MongoDB</div>
+                <div class="layer runtime">Camada: processo MongoDB</div>
                 <div class="layer os">Camadas da imagem base</div>
               </div>
               <div class="grid-3">
@@ -1098,14 +1097,15 @@ EXPOSE 80</pre>
         <article class="frame">
           <aside class="rail"><div class="mark">P</div><div class="rail-dot">14 / 20</div></aside>
           <div class="workspace">
-            <div class="panelbar"><span class="crumb">rede / publicação de porta</span><span class="status">8080 exposed</span></div>
+            <div class="panelbar"><span class="crumb">rede / publicação de porta</span><span class="status">27017 exposed</span></div>
             <div class="content">
               <h2 class="title-lg">Porta do host e porta do container</h2>
-              <pre class="code">docker run -p 8080:8080 minha-api:v1
+              <pre class="code">ports:
+  - "27017:27017"
 
-localhost:8080  →  container:8080</pre>
+localhost:27017  →  mongo:27017</pre>
               <div class="analogy"><strong>Analogia do endereço e apartamento</strong>A porta do host é a entrada do prédio. A porta interna identifica onde a aplicação atende dentro do container.</div>
-              <div class="callout">`EXPOSE 8080` documenta a porta. `-p 8080:8080` publica essa porta para acesso pelo host.</div>
+              <div class="callout">O primeiro número é a porta da sua máquina. O segundo é a porta do MongoDB dentro do container. A API da Aula 2 usará `localhost:27017`.</div>
             </div>
             <div class="pager"><a href="#slide-13">Anterior</a><span>14 / 20</span><a href="#slide-15">Próximo</a></div>
           </div>
@@ -1136,14 +1136,14 @@ localhost:8080  →  container:8080</pre>
         <article class="frame">
           <aside class="rail"><div class="mark">NET</div><div class="rail-dot">16 / 20</div></aside>
           <div class="workspace">
-            <div class="panelbar"><span class="crumb">registry / distribuição de imagens</span><span class="status">image available</span></div>
+            <div class="panelbar"><span class="crumb">registry / imagem pronta</span><span class="status">image available</span></div>
             <div class="content">
-              <h2 class="title-lg">Docker Registry</h2>
+              <h2 class="title-lg">De onde vem a imagem do MongoDB?</h2>
               <div class="grid-2">
-                <div class="tile good"><h3>Docker Hub</h3><p>Registry público com imagens prontas, como nginx, postgres e mongo.</p></div>
-                <div class="tile vm"><h3>Registry privado</h3><p>Armazena imagens internas com controle de acesso, como AWS ECR e Azure ACR.</p></div>
+                <div class="tile good"><h3>Docker Hub</h3><p>Registry que disponibiliza imagens prontas, incluindo a imagem oficial `mongo:7`.</p></div>
+                <div class="tile vm"><h3>Tag `:7`</h3><p>Indica a versão principal escolhida para a turma e evita depender de uma versão indefinida.</p></div>
               </div>
-              <div class="callout">`docker pull` baixa uma imagem. Depois de autenticar e versionar corretamente, `docker push` publica uma imagem no registry.</div>
+              <div class="callout">Na primeira execução de `docker compose up -d`, o Docker baixa a imagem se ela ainda não existir na máquina.</div>
             </div>
             <div class="pager"><a href="#slide-15">Anterior</a><span>16 / 20</span><a href="#slide-17">Próximo</a></div>
           </div>
@@ -1162,10 +1162,10 @@ localhost:8080  →  container:8080</pre>
                 <div class="tile good"><h3>Redes</h3><p>Define como os serviços se comunicam.</p></div>
                 <div class="tile good"><h3>Volumes</h3><p>Define onde dados persistentes serão armazenados.</p></div>
               </div>
-              <pre class="code">docker-compose up -d
-docker-compose logs
-docker-compose down</pre>
-              <p class="lead">O arquivo <code>docker-compose.yml</code> permite iniciar e encerrar vários containers com poucos comandos.</p>
+              <pre class="code">docker compose config
+docker compose up -d
+docker compose ps</pre>
+              <p class="lead">O comando atual é <code>docker compose</code>, com espaço. O arquivo <code>docker-compose.yml</code> descreve o ambiente e pode iniciar um ou vários serviços.</p>
             </div>
             <div class="pager"><a href="#slide-16">Anterior</a><span>17 / 20</span><a href="#slide-18">Próximo</a></div>
           </div>
@@ -1178,24 +1178,17 @@ docker-compose down</pre>
           <div class="workspace">
             <div class="panelbar"><span class="crumb">comandos / operação básica</span><span class="status">terminal ready</span></div>
             <div class="content">
-              <h2 class="title-lg">Comandos que você realmente usa</h2>
+              <h2 class="title-lg">Verifique antes de continuar</h2>
               <div class="grid-2">
-                <pre class="code">docker pull nginx:alpine
-docker images
-docker build -t site-docker:v1 .
-docker run -d -p 8080:80 \
-  --name site-docker site-docker:v1
+                <pre class="code">docker --version
+docker compose version
+docker info</pre>
+                <pre class="code">docker compose config
 docker ps
-docker logs site-docker</pre>
-                <pre class="code">docker stop site-docker
-docker start site-docker
-docker exec -it site-docker sh
-docker rm site-docker
-
-docker stats
-docker image prune</pre>
+docker compose ps
+docker compose logs --tail=20 mongo</pre>
               </div>
-              <p class="lead">Esses comandos cobrem download, build, execução, inspeção, logs, parada e manutenção básica.</p>
+              <p class="lead">Esses comandos confirmam a instalação, validam o arquivo e permitem observar o serviço sem executar limpezas gerais no Docker.</p>
             </div>
             <div class="pager"><a href="#slide-17">Anterior</a><span>18 / 20</span><a href="#slide-19">Próximo</a></div>
           </div>
@@ -1206,23 +1199,24 @@ docker image prune</pre>
         <article class="frame">
           <aside class="rail"><div class="mark">!</div><div class="rail-dot">19 / 20</div></aside>
           <div class="workspace">
-            <div class="panelbar"><span class="crumb">prática / servidor web</span><span class="status">site running</span></div>
+            <div class="panelbar"><span class="crumb">prática / mongodb local</span><span class="status">mongo ready</span></div>
             <div class="content top">
-              <h2 class="title-lg">Prática: página web em um container</h2>
+              <h2 class="title-lg">Prática: MongoDB para a API de usuários</h2>
               <div class="grid-2">
-                <pre class="code">&lt;h1&gt;
-  Aplicação executando
-  com Docker
-&lt;/h1&gt;</pre>
-                <pre class="code">localhost:8080
+                <pre class="code">services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"</pre>
+                <pre class="code">localhost:27017
         ↓
-container:80
+container:27017
         ↓
-index.html</pre>
+MongoDB</pre>
               </div>
-              <pre class="code">docker build -t site-docker:v1 .
-docker run -d -p 8080:80 --name site-docker site-docker:v1</pre>
-              <p class="lead">O exercício usa somente HTML e Nginx para concentrar a aula nos conceitos de imagem, container, build e publicação de portas.</p>
+              <pre class="code">docker compose up -d
+docker compose exec mongo mongosh --quiet --eval "db.runCommand({ ping: 1 })"</pre>
+              <p class="lead">Quando o comando retornar <code>{ ok: 1 }</code>, o banco estará pronto para a API Java 17 da próxima aula.</p>
             </div>
             <div class="pager"><a href="#slide-18">Anterior</a><span>19 / 20</span><a href="#slide-20">Próximo</a></div>
           </div>
@@ -1239,10 +1233,10 @@ docker run -d -p 8080:80 --name site-docker site-docker:v1</pre>
               <div class="grid-4">
                 <div class="tile vm"><h3>VM</h3><p>Virtualiza uma máquina completa.</p></div>
                 <div class="tile ct"><h3>Container</h3><p>Isola processos compartilhando o kernel.</p></div>
-                <div class="tile good"><h3>Imagem</h3><p>Template imutável e versionado.</p></div>
-                <div class="tile warn"><h3>Compose</h3><p>Descreve vários containers juntos.</p></div>
+                <div class="tile good"><h3>Imagem</h3><p>Pacote reutilizável, como `mongo:7`.</p></div>
+                <div class="tile warn"><h3>Compose</h3><p>Descreve e inicia o MongoDB da Aula 2.</p></div>
               </div>
-              <div class="callout">Docker não elimina a infraestrutura. Ele transforma o ambiente da aplicação em algo descrito, reproduzível e mais fácil de transportar.</div>
+              <div class="callout">A próxima etapa é criar a API de usuários com Java 17 e conectá-la ao MongoDB iniciado com este mesmo arquivo.</div>
             </div>
             <div class="pager"><a href="#slide-19">Anterior</a><span>20 / 20</span><a href="#slide-01">Início</a></div>
           </div>

@@ -29,22 +29,12 @@ site_name: UPF APIs - Aulas
 nav:
   - Home: index.md
   - Revisão Aulas 1 a 6: revisao-aulas-1-a-6.md
-  - Aula 1 VMs e Containers:
+  - Material preparatório — Docker:
     - Containers vs VMs: aula1/containers-vs-vms.md
     - Docker: aula1/docker.md
-  - Aula 2 APIs e Microsserviços:
+  - Aula 1 — APIs e Microsserviços:
     - APIs: aula2/apis.md
     - Exemplo Prático de API: aula2/exemplo-api.md
     - Arquitetura de Microsserviços: aula2/arquitetura-de-microsservicos.md
-  - Aula 3 SOLID:
-    - Tutorial Payment API: aula3/tutorial-payment-api.md
-    - Princípios SOLID: aula3/solid.md
-  - Aula 4 API Gateway:
-    - API Gateway: aula4/api-gateway.md
-    - Tutorial API Gateway: aula4/tutorial-api-gateway.md
-  - Aula 5 Message Brokers:
-    - Message Brokers: aula5/message-brokers.md
-    - Tutorial Mensageria: aula5/tutorial-pub-sub.md
-  - Aula 6 Observabilidade:
-    - Observabilidade e Monitoramento: aula6/observability.md
-    - Tutorial Observabilidade: aula6/tutorial-observability.md
+  - Aula 2 — SOLID:
+    - SOLID: aula3/aula-solid-java17-spring.md

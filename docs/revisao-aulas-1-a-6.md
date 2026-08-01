@@ -96,15 +96,15 @@ Por isso, aprender microsserviços não é só aprender a criar vários projetos
 
 ### O caminho das aulas
 
-A Aula 1 apresentou containers e Docker.
+O material preparatório apresentou containers e Docker.
 
 Antes de falar em microsserviços, precisamos entender como uma aplicação pode rodar de forma mais previsível. O container empacota a aplicação e suas dependências em um ambiente controlado. Isso ajuda a evitar o famoso problema de "na minha máquina funciona".
 
-A Aula 2 entrou em APIs e microsserviços.
+A Aula 1 entrou em APIs e microsserviços.
 
 Aqui vimos que uma API é um contrato de comunicação. Ela define como outro sistema pode chamar nossa aplicação. Também começamos a separar controller, service, repository, model e DTO.
 
-A Aula 3 trouxe SOLID.
+A Aula 2 trouxe SOLID.
 
 SOLID não existe para deixar o código bonito. Ele ajuda quando o código começa a crescer. A ideia é evitar classes que fazem coisa demais, dependências difíceis de trocar e mudanças pequenas que quebram muitas partes do sistema.
 
@@ -152,16 +152,16 @@ Use este material para estudar antes de uma prática, prova, apresentação ou c
 
 Se quiser revisar com mais profundidade, mantenha por perto:
 
-* o material da Aula 1 sobre Docker;
-* a API REST com Spring Boot e MongoDB da Aula 2;
-* o exemplo de SOLID da Aula 3;
+* o material preparatório sobre Docker;
+* a API REST com Spring Boot e MongoDB da Aula 1;
+* o exemplo de SOLID da Aula 2;
 * o gateway da Aula 4;
 * o projeto com RabbitMQ da Aula 5;
 * a aula e o tutorial de observabilidade da Aula 6.
 
 ## Passo a passo
 
-### 1. Revise a Aula 1: containers, VMs e Docker
+### 1. Revise o material preparatório: containers, VMs e Docker
 
 Comece lembrando a diferença entre máquina virtual e container.
 
@@ -183,7 +183,7 @@ O ponto que você precisa guardar:
 Docker ajuda a rodar aplicações e dependências de forma previsível.
 ```
 
-### 2. Revise a Aula 2: APIs REST e microsserviços
+### 2. Revise a Aula 1: APIs REST e microsserviços
 
 API é uma forma padronizada de comunicação entre sistemas.
 
@@ -229,7 +229,7 @@ O ponto que você precisa guardar:
 API boa tem contrato claro e responsabilidade bem separada no código.
 ```
 
-### 3. Revise a Aula 3: SOLID
+### 3. Revise a Aula 2: SOLID
 
 SOLID é um conjunto de princípios para reduzir bagunça quando o sistema cresce.
 
