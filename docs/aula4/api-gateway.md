@@ -435,3 +435,4 @@ O serviço continua com a regra de negócio.
 Depois que esse conceito estiver claro, a aula prática pode escolher uma ferramenta específica para implementar esse comportamento.
 
 
+TEMOSQUE aumentar a aula de gateway ja foi dado uma parte dela 

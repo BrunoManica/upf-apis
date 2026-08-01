@@ -1,0 +1,104 @@
+Universidade de Passo Fundo - UPF
+Instituto de Tecnologia - ITEC
+Prova - Apis e microserviços - 25/06/2026
+Prof. Bruno Manica
+
+Aluno:	Matrícula:
+
+
+1. (Assinale a alternativa correta) Qual é a principal diferença entre uma máquina virtual e um container Docker?
+a) A máquina virtual e o container têm a mesma função prática, pois os dois sempre simulam um sistema operacional completo.
+b) O container costuma ser mais pesado porque precisa carregar seu próprio sistema operacional completo para cada aplicação.
+c) A máquina virtual é usada apenas em produção, enquanto containers servem apenas para testes locais.
+d) A máquina virtual simula um computador completo, enquanto o container isola a aplicação e suas dependências de forma mais leve.
+
+2. (Assinale a alternativa correta) Em uma API REST, qual é o papel principal do controller?
+a) Concentrar as regras de negócio para evitar que o service fique grande demais.
+b) Acessar diretamente o banco de dados sempre que a operação for simples.
+c) Substituir os DTOs, já que o controller pode receber e devolver qualquer objeto da aplicação.
+d) Receber a requisição HTTP, validar a entrada quando necessário e delegar a regra principal para o service.
+
+3. (Assinale a alternativa correta) Em um sistema com API Gateway, um mesmo cliente começa a fazer muitas requisições em poucos segundos.
+Qual alternativa descreve melhor o papel de um rate limiter nesse cenário?
+a) Aumentar automaticamente a quantidade de instâncias dos microsserviços quando houver muitas chamadas.
+b) Guardar todas as requisições excedentes para executar depois, garantindo que nenhuma chamada seja recusada.
+c) Transformar requisições HTTP em eventos assíncronos sempre que o sistema estiver sobrecarregado.
+d) Controlar a quantidade de requisições permitidas em uma janela de tempo para reduzir abuso e sobrecarga.
+
+4. (Assinale a alternativa correta) Em uma arquitetura de microsserviços, por que cada serviço deve cuidar da sua própria responsabilidade?
+a) Porque todos os serviços devem compartilhar o mesmo banco para evitar duplicação de dados.
+b) Porque o API Gateway deve concentrar as regras principais e deixar os microsserviços mais simples.
+c) Porque microsserviços devem evitar qualquer comunicação com outros serviços.
+d) Porque cada serviço deve ter um papel bem definido, evitando misturar regras de domínios diferentes no mesmo lugar.
+
+
+
+
+5. (Múltipla escolha de verdadeiro ou falso) Analise as afirmações abaixo sobre SOLID e marque V para verdadeiro ou F para falso.
+a) A letra S representa o Single Responsibility Principle, que indica que uma classe deve ter uma responsabilidade principal bem definida.
+b) A letra O representa o Open/Closed Principle, que indica que o código deve ser aberto para extensão e fechado para modificação.
+c) A letra L representa o Long Class Principle, que indica que classes grandes são melhores porque concentram mais regras em um só lugar.
+d) A letra D representa o Direct Dependency Principle, que indica que classes importantes devem depender diretamente de classes concretas para simplificar o código.
+
+6. (Assinale a alternativa correta) Em um sistema de vendas, quando um pedido é criado, vários serviços podem ter interesse nessa informação: um serviço pode enviar um email para o cliente, outro pode iniciar o faturamento e outro pode separar o estoque.
+Qual alternativa descreve melhor a ideia de Publish/Subscribe nesse cenário?
+a) O serviço que cria o pedido chama diretamente cada serviço interessado e espera todos terminarem.
+b) O serviço que cria o pedido publica um evento, e os serviços interessados assinam esse tipo de evento para reagir quando ele acontecer.
+c) O serviço que cria o pedido precisa conhecer a regra interna de cada serviço interessado para publicar o evento corretamente.
+d) Todos os serviços interessados precisam compartilhar o mesmo banco para receber a informação ao mesmo tempo.
+
+7. (Múltipla escolha de verdadeiro ou falso) Analise as afirmações abaixo sobre mensageria e marque V para verdadeiro ou F para falso.
+a) Mensageria ajuda serviços a se comunicarem sem depender sempre de chamadas HTTP diretas.
+b) Em um modelo baseado em eventos, o producer publica que algo aconteceu, e os consumers podem reagir a esse fato.
+c) O producer deve conhecer a regra interna de todos os consumers para garantir que cada serviço execute sua tarefa.
+d) Usar mensageria elimina a necessidade de pensar em falhas, retry ou processamento duplicado.
+
+
+
+
+
+
+
+
+
+
+8. (Descritiva) Explique a diferença entre uma API REST e uma API SOAP. Dê exemplos de uso de cada uma.
+
+Na resposta, explique:
+- como cada estilo organiza a comunicação;
+- como REST costuma usar recursos, URLs e métodos HTTP;
+- como SOAP costuma usar mensagens mais padronizadas, normalmente em XML;
+- um cenário em que REST faz sentido;
+- um cenário em que SOAP ainda pode aparecer.
+
+9. (Descritiva) Explique a diferença entre Controller, Service e Repository em uma API.
+
+Na resposta, explique:
+- o que o controller deve receber e delegar;
+- que tipo de regra deve ficar no service;
+- qual é o papel do repository no acesso aos dados;
+- por que o controller não deve concentrar regra de negócio nem acessar o banco diretamente;
+- por que separar essas camadas melhora manutenção e testes.
+
+10. (Descritiva) Um cliente reclama que a criação de pedidos está lenta. A requisição passa por várias partes do sistema, como API Gateway, serviço de pedidos, banco de dados e, em alguns casos, publicação de mensagem.
+Explique como logs, métricas e traces ajudariam a investigar esse problema.
+
+Na resposta, explique:
+- o que é cada um desses três pilares;
+- como logs ajudariam a entender eventos e erros da execução;
+- como métricas ajudariam a perceber lentidão, volume de requisições ou aumento de erros;
+- como traces ajudariam a descobrir em qual parte do caminho a requisição demorou mais;
+- um exemplo prático de informação que cada pilar poderia mostrar nesse cenário.
+
+
+Gabarito
+
+1. d
+2. d
+3. d
+4. d
+5. a) V; b) V; c) F; d) F
+6. b
+7. a) V; b) V; c) F; d) F
+
+

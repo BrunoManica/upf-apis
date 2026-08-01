@@ -18,9 +18,91 @@ A cozinha não precisa saber quem você é, e você não precisa saber como a co
 
 Existem vários estilos de API, cada um com seu propósito:
 
-- **REST**: o mais comum. Usa HTTP e métodos como GET, POST, PUT e DELETE. É simples, direto e muito usado em aplicações web e mobile.  
+- **REST**: estilo arquitetural que normalmente usa HTTP, recursos e métodos como GET, POST, PUT e DELETE. É muito usado em aplicações web e mobile.  
+- **SOAP**: protocolo de comunicação baseado em mensagens estruturadas, normalmente escritas em XML. É comum em integrações corporativas que exigem contratos rígidos e padrões adicionais de segurança e transação.  
 - **GraphQL**: permite que o cliente peça **exatamente** os dados que precisa, de forma mais flexível que REST.  
 - **gRPC**: muito rápido e eficiente, usado principalmente quando **serviços falam com outros serviços**, como em sistemas de alta performance.
+
+## SOAP, XML, REST e JSON
+
+Esses termos aparecem juntos com frequência, mas não representam a mesma categoria de tecnologia:
+
+| Termo | O que é | Uso comum |
+|---|---|---|
+| SOAP | Protocolo de comunicação | Integrações corporativas com contrato rígido |
+| REST | Estilo arquitetural | APIs web organizadas em recursos |
+| XML | Formato textual de dados | Mensagens SOAP e integrações que exigem documentos estruturados |
+| JSON | Formato textual de dados | Requisições e respostas de APIs REST |
+
+SOAP e REST definem maneiras diferentes de organizar a comunicação. XML e JSON definem como os dados são representados durante essa comunicação.
+
+### SOAP e XML
+
+Uma mensagem SOAP é um documento XML com uma estrutura chamada envelope. O envelope identifica a mensagem SOAP, o cabeçalho pode carregar informações adicionais e o corpo contém os dados da operação.
+
+Exemplo simplificado de uma requisição para buscar um usuário:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+    <soap:Body>
+        <buscarUsuario>
+            <id>123</id>
+        </buscarUsuario>
+    </soap:Body>
+</soap:Envelope>
+```
+
+Em uma API SOAP, as operações e os tipos de dados podem ser descritos por um documento WSDL. Esse contrato permite que ferramentas gerem parte do código necessário para clientes e servidores. Em contrapartida, as mensagens XML costumam ser mais extensas e o contrato mais rígido.
+
+SOAP pode ser adequado quando uma integração precisa seguir padrões corporativos já estabelecidos, contratos formais ou mecanismos da família WS-*, como WS-Security. Isso não significa que toda API corporativa deva usar SOAP; a escolha depende dos requisitos e dos sistemas envolvidos.
+
+### REST e JSON
+
+Em uma API REST, o foco está nos recursos. Um usuário pode ser representado pelo caminho `/api/users/123`, e o método HTTP informa a operação desejada.
+
+```http
+GET /api/users/123 HTTP/1.1
+Host: localhost:8080
+Accept: application/json
+```
+
+Uma resposta em JSON poderia ser:
+
+```json
+{
+  "id": 123,
+  "name": "Ana Silva",
+  "email": "ana@email.com"
+}
+```
+
+JSON representa objetos por pares de chave e valor e listas por colchetes. Ele costuma ser mais compacto que XML e possui integração direta com JavaScript, por isso se tornou o formato mais comum em APIs web.
+
+REST não exige JSON. O mesmo recurso poderia ser devolvido em XML se o cliente solicitasse `application/xml` e o servidor oferecesse esse formato:
+
+```xml
+<user>
+    <id>123</id>
+    <name>Ana Silva</name>
+    <email>ana@email.com</email>
+</user>
+```
+
+O cabeçalho `Content-Type` informa o formato do corpo enviado. O cabeçalho `Accept` informa qual formato o cliente deseja receber. Quando trabalharmos com Spring Boot, usaremos principalmente `application/json`.
+
+### Comparação prática
+
+| Aspecto | SOAP com XML | REST com JSON |
+|---|---|---|
+| Organização | Operações definidas por um protocolo | Recursos manipulados por métodos HTTP |
+| Contrato | Frequentemente descrito por WSDL | Frequentemente descrito por OpenAPI |
+| Formato mais comum | XML | JSON |
+| Tamanho das mensagens | Geralmente maior | Geralmente menor |
+| Flexibilidade | Contrato mais rígido | Contrato geralmente mais simples de evoluir |
+| Cenário frequente | Sistemas corporativos e legados | Aplicações web, mobile e microsserviços |
+
+Não existe vencedor universal. Em um sistema novo com clientes web e mobile, REST com JSON costuma ser uma escolha simples. Quando é necessário integrar com um serviço SOAP existente, o cliente deve respeitar o contrato XML definido por esse serviço.
 
 ## Componentes Básicos de uma API
 

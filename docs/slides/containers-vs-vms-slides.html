@@ -1,0 +1,1247 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aula 1 - Containers, VMs e Docker</title>
+    <style>
+      :root {
+        --night: #07131d;
+        --yard: #0c202d;
+        --steel: #183847;
+        --line: #315767;
+        --text: #f3f8fa;
+        --muted: #a4b5bc;
+        --blue: #39b9f2;
+        --orange: #ff8b3d;
+        --yellow: #f5c84c;
+        --green: #4fd49b;
+        --red: #ef6464;
+        --deck: min(1240px, calc(100vw - 34px));
+      }
+
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        background:
+          linear-gradient(180deg, #06111a 0 64%, #0a1b25 64% 100%);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background:
+          radial-gradient(circle at 78% 18%, rgba(57, 185, 242, 0.13), transparent 24rem),
+          repeating-linear-gradient(90deg, transparent 0 79px, rgba(255, 255, 255, 0.025) 79px 80px);
+      }
+
+      a { color: inherit; text-decoration: none; }
+      h1, h2, h3, p { margin: 0; }
+
+      .topbar {
+        position: fixed;
+        inset: 18px 18px auto;
+        z-index: 30;
+        pointer-events: none;
+      }
+
+      .topbar-inner {
+        width: var(--deck);
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .brand {
+        padding: 9px 13px;
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        border: 1px solid var(--orange);
+        background: rgba(7, 19, 29, 0.9);
+        box-shadow: 5px 5px 0 rgba(255, 139, 61, 0.18);
+        pointer-events: auto;
+      }
+
+      .brand strong {
+        color: var(--orange);
+        font-size: 0.8rem;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .brand span {
+        color: var(--muted);
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 0.68rem;
+      }
+
+      .topnav {
+        padding: 7px;
+        display: flex;
+        gap: 4px;
+        border: 1px solid var(--line);
+        background: rgba(7, 19, 29, 0.9);
+        pointer-events: auto;
+      }
+
+      .topnav a {
+        width: 25px;
+        height: 25px;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 0.6rem;
+        font-weight: 900;
+      }
+
+      .topnav a:hover {
+        color: #15100a;
+        background: var(--orange);
+      }
+
+      .slide {
+        position: relative;
+        min-height: 100vh;
+        padding: 80px 0 24px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+      }
+
+      .slide::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 9%;
+        z-index: 0;
+        height: 6px;
+        background:
+          repeating-linear-gradient(90deg, var(--yellow) 0 42px, transparent 42px 78px);
+        opacity: 0.36;
+        transform: skewY(-1deg);
+      }
+
+      .frame {
+        position: relative;
+        z-index: 1;
+        width: var(--deck);
+        min-height: min(760px, calc(100vh - 108px));
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: 118px 1fr;
+        border: 1px solid #416170;
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+          rgba(12, 32, 45, 0.97);
+        background-size: 100% 38px;
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.42);
+      }
+
+      .frame::before,
+      .frame::after {
+        content: "";
+        position: absolute;
+        right: 28px;
+        z-index: 0;
+        width: 90px;
+        height: 42px;
+        border: 2px solid rgba(57, 185, 242, 0.18);
+        background:
+          repeating-linear-gradient(90deg, transparent 0 10px, rgba(57, 185, 242, 0.08) 10px 11px);
+      }
+
+      .frame::before { top: 92px; }
+      .frame::after {
+        top: 145px;
+        border-color: rgba(255, 139, 61, 0.2);
+        background:
+          repeating-linear-gradient(90deg, transparent 0 10px, rgba(255, 139, 61, 0.08) 10px 11px);
+      }
+
+      .rail {
+        position: relative;
+        padding: 18px 12px;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        justify-items: center;
+        border-right: 2px solid #456474;
+        background:
+          repeating-linear-gradient(90deg, transparent 0 12px, rgba(255, 255, 255, 0.045) 12px 13px),
+          #102a38;
+      }
+
+      .rail::after {
+        content: "CONTAINER\A TERMINAL";
+        white-space: pre;
+        position: absolute;
+        top: 95px;
+        color: rgba(243, 248, 250, 0.42);
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 0.56rem;
+        font-weight: 900;
+        line-height: 1.5;
+        letter-spacing: 0.12em;
+        text-align: center;
+      }
+
+      .mark {
+        width: 56px;
+        height: 48px;
+        display: grid;
+        place-items: center;
+        color: #1b1008;
+        border: 2px solid #1d1510;
+        background: var(--orange);
+        box-shadow: 4px 4px 0 #1d1510;
+        font-weight: 950;
+      }
+
+      .rail-dot {
+        align-self: end;
+        color: var(--muted);
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 0.68rem;
+        letter-spacing: 0.12em;
+        writing-mode: vertical-rl;
+      }
+
+      .workspace {
+        min-width: 0;
+        display: grid;
+        grid-template-rows: 56px 1fr 58px;
+      }
+
+      .panelbar {
+        padding: 0 26px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--line);
+        background: rgba(6, 20, 30, 0.55);
+      }
+
+      .crumb, .status {
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 0.68rem;
+        font-weight: 850;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .crumb { color: var(--muted); }
+      .status { color: var(--green); }
+
+      .status::before {
+        content: "";
+        width: 9px;
+        height: 9px;
+        margin-right: 8px;
+        display: inline-block;
+        background: var(--green);
+        box-shadow: 0 0 12px var(--green);
+      }
+
+      .content {
+        min-width: 0;
+        padding: 34px 42px;
+        display: grid;
+        align-content: center;
+        gap: 22px;
+      }
+
+      .content.top { align-content: start; }
+
+      .kicker {
+        width: fit-content;
+        padding: 6px 10px;
+        color: #1c1008;
+        background: var(--orange);
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 0.7rem;
+        font-weight: 950;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .title-xl {
+        max-width: 12ch;
+        font-size: clamp(4rem, 8.8vw, 8rem);
+        line-height: 0.88;
+        letter-spacing: -0.065em;
+      }
+
+      .title-lg {
+        max-width: 16ch;
+        font-size: clamp(2.5rem, 5vw, 4.8rem);
+        line-height: 0.98;
+        letter-spacing: -0.045em;
+      }
+
+      .lead {
+        max-width: 62ch;
+        color: var(--muted);
+        font-size: clamp(1rem, 1.6vw, 1.3rem);
+        line-height: 1.46;
+      }
+
+      .big {
+        max-width: 32ch;
+        font-size: clamp(1.5rem, 3vw, 2.8rem);
+        line-height: 1.16;
+        font-weight: 800;
+      }
+
+      .yard {
+        min-height: 230px;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        align-items: end;
+      }
+
+      .container-box {
+        position: relative;
+        min-height: 112px;
+        padding: 17px;
+        display: grid;
+        align-content: center;
+        gap: 6px;
+        color: #101820;
+        border: 2px solid #101820;
+        box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.42);
+        background:
+          repeating-linear-gradient(90deg, transparent 0 14px, rgba(0, 0, 0, 0.12) 14px 16px),
+          var(--blue);
+      }
+
+      .container-box:nth-child(2) { min-height: 155px; background-color: var(--orange); }
+      .container-box:nth-child(3) { min-height: 132px; background-color: var(--green); }
+      .container-box:nth-child(4) { min-height: 180px; background-color: var(--yellow); }
+
+      .container-box::after {
+        content: "ISO  /  APP";
+        position: absolute;
+        right: 8px;
+        top: 8px;
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 0.46rem;
+        font-weight: 950;
+        letter-spacing: 0.1em;
+        opacity: 0.6;
+      }
+
+      .container-box span { font-size: 0.8rem; }
+
+      .grid-2, .grid-3, .grid-4 {
+        display: grid;
+        gap: 14px;
+      }
+
+      .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+      .tile {
+        min-width: 0;
+        padding: 18px;
+        border: 1px solid var(--line);
+        background: rgba(16, 42, 56, 0.76);
+      }
+
+      .tile h3 { margin-bottom: 8px; font-size: 1rem; }
+      .tile p { color: var(--muted); line-height: 1.42; }
+      .tile.vm { border-top: 7px solid var(--red); }
+      .tile.ct { border-top: 7px solid var(--blue); }
+      .tile.good { border-top: 7px solid var(--green); }
+      .tile.warn { border-top: 7px solid var(--yellow); }
+
+      .stack {
+        display: grid;
+        gap: 6px;
+      }
+
+      .layer {
+        padding: 13px 16px;
+        border: 1px solid var(--line);
+        background: var(--steel);
+        text-align: center;
+        font-weight: 800;
+      }
+
+      .layer.app { background: rgba(57, 185, 242, 0.2); border-color: var(--blue); }
+      .layer.os { background: rgba(239, 100, 100, 0.17); border-color: var(--red); }
+      .layer.runtime { background: rgba(79, 212, 155, 0.16); border-color: var(--green); }
+      .layer.hardware { background: #07131d; }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 24px;
+      }
+
+      .node {
+        position: relative;
+        min-height: 112px;
+        padding: 16px;
+        display: grid;
+        place-content: center;
+        text-align: center;
+        border: 2px solid var(--line);
+        background: rgba(7, 19, 29, 0.82);
+      }
+
+      .node:not(:last-child)::after {
+        content: "→";
+        position: absolute;
+        right: -20px;
+        top: 50%;
+        color: var(--orange);
+        font-size: 1.4rem;
+        transform: translateY(-50%);
+      }
+
+      .node.hot { border-color: var(--orange); }
+
+      .analogy {
+        padding: 18px 20px 18px 72px;
+        position: relative;
+        border: 1px dashed var(--yellow);
+        background: rgba(245, 200, 76, 0.06);
+        line-height: 1.42;
+      }
+
+      .analogy::before {
+        content: "≈";
+        position: absolute;
+        left: 20px;
+        top: 50%;
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        color: #211704;
+        border-radius: 50%;
+        background: var(--yellow);
+        font-size: 1.4rem;
+        font-weight: 950;
+        transform: translateY(-50%);
+      }
+
+      .analogy strong { display: block; margin-bottom: 4px; color: var(--yellow); }
+
+      .code {
+        margin: 0;
+        padding: 18px;
+        overflow: auto;
+        color: #dff7ff;
+        border: 1px solid var(--line);
+        border-left: 7px solid var(--orange);
+        background: #030a0f;
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: clamp(0.78rem, 1.08vw, 0.97rem);
+        line-height: 1.48;
+      }
+
+      .list {
+        margin: 0;
+        padding-left: 22px;
+        display: grid;
+        gap: 11px;
+        color: var(--muted);
+        font-size: clamp(1rem, 1.5vw, 1.24rem);
+        line-height: 1.38;
+      }
+
+      .list strong { color: var(--text); }
+
+      .callout {
+        padding: 19px 22px;
+        border-left: 6px solid var(--orange);
+        background: linear-gradient(90deg, rgba(255, 139, 61, 0.13), transparent);
+        font-size: clamp(1rem, 1.6vw, 1.28rem);
+        line-height: 1.42;
+      }
+
+      .pager {
+        padding: 0 26px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-top: 1px solid var(--line);
+        background: rgba(5, 16, 24, 0.45);
+      }
+
+      .pager span {
+        color: var(--muted);
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 0.7rem;
+      }
+
+      .pager a {
+        padding: 7px 11px;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        font-size: 0.72rem;
+        font-weight: 850;
+        text-transform: uppercase;
+      }
+
+      .pager a:hover {
+        color: #1b1008;
+        border-color: var(--orange);
+        background: var(--orange);
+      }
+
+      @media (max-width: 920px) {
+        .topnav { display: none; }
+        .frame { grid-template-columns: 72px 1fr; min-height: auto; }
+        .content { padding: 28px 24px; }
+        .yard, .grid-3, .grid-4, .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .node:not(:last-child)::after { display: none; }
+      }
+
+      @media (max-width: 560px) {
+        :root { --deck: calc(100vw - 16px); }
+        .brand span { display: none; }
+        .slide { padding-top: 70px; }
+        .frame { grid-template-columns: 1fr; }
+        .rail { display: none; }
+        .workspace { grid-template-rows: 48px 1fr 52px; }
+        .content { padding: 22px 18px; }
+        .yard, .grid-2, .grid-3, .grid-4, .flow { grid-template-columns: 1fr; }
+      }
+
+      /*
+       * Identidade permanente da Aula 1:
+       * virtualização completa à esquerda, Docker à direita.
+       */
+      body {
+        background:
+          linear-gradient(90deg, #170c10 0 50%, #061522 50% 100%);
+      }
+
+      body::before {
+        background:
+          linear-gradient(rgba(239, 100, 100, 0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(57, 185, 242, 0.035) 1px, transparent 1px);
+        background-size: 42px 42px;
+      }
+
+      .brand {
+        border: 0;
+        border-left: 5px solid var(--red);
+        border-right: 5px solid var(--blue);
+        background: rgba(5, 12, 18, 0.94);
+        box-shadow: none;
+      }
+
+      .brand strong {
+        color: var(--text);
+      }
+
+      .frame {
+        grid-template-columns: 1fr;
+        background:
+          linear-gradient(
+            90deg,
+            rgba(239, 100, 100, 0.065) 0 49.9%,
+            rgba(57, 185, 242, 0.065) 50.1% 100%
+          ),
+          rgba(10, 25, 36, 0.98);
+      }
+
+      .frame::before {
+        content: "VIRTUAL MACHINE";
+        left: 0;
+        right: auto;
+        top: 0;
+        z-index: 5;
+        width: 50%;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        color: var(--red);
+        border: 0;
+        border-bottom: 1px solid rgba(239, 100, 100, 0.32);
+        background: rgba(45, 15, 20, 0.76);
+        box-shadow: none;
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 0.64rem;
+        font-weight: 950;
+        letter-spacing: 0.18em;
+      }
+
+      .frame::after {
+        content: "DOCKER ENGINE";
+        right: 0;
+        top: 0;
+        z-index: 5;
+        width: 50%;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        color: var(--blue);
+        border: 0;
+        border-bottom: 1px solid rgba(57, 185, 242, 0.32);
+        background: rgba(5, 30, 46, 0.76);
+        box-shadow: none;
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 0.64rem;
+        font-weight: 950;
+        letter-spacing: 0.18em;
+      }
+
+      .rail {
+        display: none;
+      }
+
+      .workspace {
+        position: relative;
+        padding-top: 38px;
+      }
+
+      .workspace::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 38px;
+        bottom: 0;
+        z-index: 0;
+        width: 1px;
+        background: linear-gradient(
+          to bottom,
+          rgba(245, 200, 76, 0.55),
+          rgba(245, 200, 76, 0.08) 22% 78%,
+          rgba(245, 200, 76, 0.55)
+        );
+      }
+
+      .workspace::after {
+        content: "VS";
+        position: absolute;
+        left: 50%;
+        top: 18px;
+        z-index: 8;
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        color: #181006;
+        border-radius: 50%;
+        background: var(--yellow);
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 0.62rem;
+        font-weight: 950;
+        transform: translateX(-50%);
+      }
+
+      .panelbar,
+      .content,
+      .pager {
+        position: relative;
+        z-index: 2;
+      }
+
+      .panelbar {
+        margin-top: 0;
+        background: rgba(5, 13, 20, 0.7);
+      }
+
+      .kicker {
+        color: var(--text);
+        background: linear-gradient(90deg, var(--red), var(--blue));
+      }
+
+      .title-xl,
+      .title-lg {
+        text-shadow:
+          -2px 0 18px rgba(239, 100, 100, 0.08),
+          2px 0 18px rgba(57, 185, 242, 0.08);
+      }
+
+      .hero-compare {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 42px;
+      }
+
+      .hero-side {
+        padding: 18px;
+        display: grid;
+        gap: 8px;
+        border: 2px solid currentColor;
+        background: rgba(5, 14, 21, 0.82);
+      }
+
+      .hero-side.vm-side { color: var(--red); }
+      .hero-side.docker-side { color: var(--blue); }
+
+      .hero-side h3 {
+        color: currentColor;
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 0.78rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .hero-side .layer {
+        color: var(--text);
+      }
+
+      .hero-side .apps {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 7px;
+      }
+
+      .hero-side .app-unit {
+        padding: 12px 6px;
+        color: var(--text);
+        border: 1px solid currentColor;
+        background: rgba(255, 255, 255, 0.035);
+        text-align: center;
+        font-size: 0.76rem;
+        font-weight: 800;
+      }
+
+      .hero-side .guest {
+        padding: 8px 5px;
+        color: var(--muted);
+        border: 1px dashed currentColor;
+        text-align: center;
+        font-size: 0.66rem;
+      }
+
+      .yard {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 42px;
+      }
+
+      .container-box {
+        min-height: 120px;
+        background:
+          repeating-linear-gradient(90deg, transparent 0 14px, rgba(0, 0, 0, 0.1) 14px 16px),
+          var(--blue);
+      }
+
+      .container-box:nth-child(2),
+      .container-box:nth-child(4) {
+        background-color: var(--blue);
+      }
+
+      .container-box:nth-child(3) {
+        background-color: var(--red);
+      }
+
+      .tile.vm {
+        background: rgba(239, 100, 100, 0.08);
+      }
+
+      .tile.ct,
+      .tile.good {
+        background: rgba(57, 185, 242, 0.08);
+      }
+
+      .callout {
+        border-left-color: var(--yellow);
+        background:
+          linear-gradient(90deg, rgba(239, 100, 100, 0.08), transparent 46%),
+          linear-gradient(270deg, rgba(57, 185, 242, 0.08), transparent 46%);
+      }
+
+      .slide::after {
+        display: none;
+      }
+
+      @media (max-width: 560px) {
+        .hero-compare {
+          grid-template-columns: 1fr;
+        }
+
+        .workspace::before,
+        .workspace::after {
+          display: none;
+        }
+
+        .frame::before,
+        .frame::after {
+          font-size: 0.48rem;
+          letter-spacing: 0.06em;
+        }
+      }
+      @page {
+        size: 16.6667in 9.375in;
+        margin: 0;
+      }
+
+      @media print {
+        html,
+        body {
+          margin: 0;
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+
+        .slide {
+          box-sizing: border-box;
+          width: 100vw;
+          height: 100vh;
+          min-height: 100vh;
+          break-after: page;
+          page-break-after: always;
+        }
+
+        .slide:last-child {
+          break-after: auto;
+          page-break-after: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand"><strong>UPF APIs</strong><span>Aula 1 · Containers, VMs e Docker</span></div>
+        <nav class="topnav" aria-label="Mapa dos slides">
+          <a href="#slide-01">01</a><a href="#slide-02">02</a><a href="#slide-03">03</a><a href="#slide-04">04</a>
+          <a href="#slide-05">05</a><a href="#slide-06">06</a><a href="#slide-07">07</a><a href="#slide-08">08</a>
+          <a href="#slide-09">09</a><a href="#slide-10">10</a><a href="#slide-11">11</a><a href="#slide-12">12</a>
+          <a href="#slide-13">13</a><a href="#slide-14">14</a><a href="#slide-15">15</a><a href="#slide-16">16</a>
+          <a href="#slide-17">17</a><a href="#slide-18">18</a><a href="#slide-19">19</a><a href="#slide-20">20</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="slide" id="slide-01">
+        <article class="frame">
+          <aside class="rail"><div class="mark">01</div><div class="rail-dot">01 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">terminal / overview</span><span class="status">engine running</span></div>
+            <div class="content">
+              <span class="kicker">Aula 1</span>
+              <h1 class="title-xl">Containers, VMs e Docker</h1>
+              <p class="lead">Do isolamento de ambientes até um MongoDB local descrito e repetido com o mesmo arquivo.</p>
+              <div class="hero-compare">
+                <div class="hero-side vm-side">
+                  <h3>Máquinas virtuais</h3>
+                  <div class="apps">
+                    <div><div class="app-unit">App A</div><div class="guest">Guest OS</div></div>
+                    <div><div class="app-unit">App B</div><div class="guest">Guest OS</div></div>
+                    <div><div class="app-unit">App C</div><div class="guest">Guest OS</div></div>
+                  </div>
+                  <div class="layer">Hipervisor</div>
+                  <div class="layer hardware">Hardware</div>
+                </div>
+                <div class="hero-side docker-side">
+                  <h3>Docker e containers</h3>
+                  <div class="apps">
+                    <div class="app-unit">Container A</div>
+                    <div class="app-unit">Container B</div>
+                    <div class="app-unit">Container C</div>
+                  </div>
+                  <div class="layer runtime">Docker Engine</div>
+                  <div class="layer os">Kernel compartilhado</div>
+                  <div class="layer hardware">Hardware</div>
+                </div>
+              </div>
+            </div>
+            <div class="pager"><span>01 / 20</span><a href="#slide-02">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-02">
+        <article class="frame">
+          <aside class="rail"><div class="mark">02</div><div class="rail-dot">02 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">objetivo / ambiente reproduzível</span><span class="status">manifest loaded</span></div>
+            <div class="content">
+              <h2 class="title-lg">Objetivo da aula</h2>
+              <p class="big">Distinguir VMs de containers e preparar o MongoDB que a API de usuários usará na Aula 2.</p>
+              <div class="callout">Vamos comparar as duas formas de isolamento e, depois, usar imagem, container, porta, volume e Docker Compose para iniciar o banco local.</div>
+            </div>
+            <div class="pager"><a href="#slide-01">Anterior</a><span>02 / 20</span><a href="#slide-03">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-03">
+        <article class="frame">
+          <aside class="rail"><div class="mark">03</div><div class="rail-dot">03 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">contexto / ambiente local</span><span class="status">setup repeatable</span></div>
+            <div class="content">
+              <h2 class="title-lg">O problema: “na minha máquina funciona”</h2>
+              <div class="grid-2">
+                <div class="tile vm"><h3>Configuração manual</h3><p>Versões, serviços e senhas podem mudar de um computador para outro.</p></div>
+                <div class="tile ct"><h3>Ambiente descrito</h3><p>Um arquivo registra a imagem, a porta e os dados persistentes usados pela turma.</p></div>
+              </div>
+              <div class="callout">Docker não elimina todas as diferenças entre sistemas operacionais, mas torna a configuração do serviço repetível por meio do mesmo arquivo.</div>
+            </div>
+            <div class="pager"><a href="#slide-02">Anterior</a><span>03 / 20</span><a href="#slide-04">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-04">
+        <article class="frame">
+          <aside class="rail"><div class="mark">HW</div><div class="rail-dot">04 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">bare metal / máquina física</span><span class="status">direct hardware</span></div>
+            <div class="content">
+              <h2 class="title-lg">Uma máquina sem virtualização</h2>
+              <div class="stack">
+                <div class="layer app">Aplicações</div>
+                <div class="layer os">Sistema operacional</div>
+                <div class="layer hardware">Hardware físico</div>
+              </div>
+              <p class="lead">A aplicação usa diretamente o sistema operacional instalado no computador. Essa é a base para entender o que VMs e containers isolam de maneiras diferentes.</p>
+            </div>
+            <div class="pager"><a href="#slide-03">Anterior</a><span>04 / 20</span><a href="#slide-05">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-05">
+        <article class="frame">
+          <aside class="rail"><div class="mark">VM</div><div class="rail-dot">05 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">virtualização / máquinas completas</span><span class="status">hypervisor active</span></div>
+            <div class="content">
+              <h2 class="title-lg">Máquinas virtuais</h2>
+              <div class="grid-3">
+                <div class="stack"><div class="layer app">App A</div><div class="layer os">Guest OS</div></div>
+                <div class="stack"><div class="layer app">App B</div><div class="layer os">Guest OS</div></div>
+                <div class="stack"><div class="layer app">App C</div><div class="layer os">Guest OS</div></div>
+              </div>
+              <div class="layer runtime">Hipervisor</div>
+              <div class="layer hardware">Hardware</div>
+              <div class="analogy"><strong>Analogia dos apartamentos</strong>Cada VM é um apartamento completo: tem seu próprio sistema, instalações e isolamento. Isso oferece independência, mas ocupa mais espaço e recursos.</div>
+            </div>
+            <div class="pager"><a href="#slide-04">Anterior</a><span>05 / 20</span><a href="#slide-06">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-06">
+        <article class="frame">
+          <aside class="rail"><div class="mark">CT</div><div class="rail-dot">06 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">container / processos isolados</span><span class="status">shared kernel</span></div>
+            <div class="content">
+              <h2 class="title-lg">Containers</h2>
+              <div class="grid-3">
+                <div class="stack"><div class="layer app">App A + libs</div></div>
+                <div class="stack"><div class="layer app">App B + libs</div></div>
+                <div class="stack"><div class="layer app">App C + libs</div></div>
+              </div>
+              <div class="layer runtime">Container runtime</div>
+              <div class="layer os">Kernel compartilhado</div>
+              <div class="layer hardware">Hardware</div>
+              <div class="analogy"><strong>Analogia dos quartos</strong>Containers são quartos independentes dentro do mesmo prédio. Cada aplicação tem seu espaço, mas todas compartilham a estrutura principal.</div>
+            </div>
+            <div class="pager"><a href="#slide-05">Anterior</a><span>06 / 20</span><a href="#slide-07">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-07">
+        <article class="frame">
+          <aside class="rail"><div class="mark">≠</div><div class="rail-dot">07 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">comparação / vm versus container</span><span class="status">trade-offs visible</span></div>
+            <div class="content">
+              <h2 class="title-lg">VM e container não são a mesma coisa</h2>
+              <div class="grid-2">
+                <div class="tile vm"><h3>Máquina virtual</h3><p>Sistema operacional completo, tamanho maior, inicialização mais lenta e isolamento mais forte.</p></div>
+                <div class="tile ct"><h3>Container</h3><p>Processo isolado, kernel compartilhado, imagem menor e inicialização rápida.</p></div>
+              </div>
+              <div class="callout">Container não é uma “VM pequena”. A diferença principal está no que cada abordagem virtualiza e compartilha.</div>
+            </div>
+            <div class="pager"><a href="#slide-06">Anterior</a><span>07 / 20</span><a href="#slide-08">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-08">
+        <article class="frame">
+          <aside class="rail"><div class="mark">?</div><div class="rail-dot">08 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">decisão / escolher isolamento</span><span class="status">use case selected</span></div>
+            <div class="content">
+              <h2 class="title-lg">Quando usar cada um?</h2>
+              <div class="grid-2">
+                <div class="tile ct"><h3>Containers</h3><p>APIs, microsserviços, pipelines, ambientes locais reproduzíveis e escala horizontal.</p></div>
+                <div class="tile vm"><h3>VMs</h3><p>Sistemas operacionais diferentes, aplicações legadas e isolamento de máquina completa.</p></div>
+              </div>
+              <p class="lead">As abordagens também podem coexistir: containers frequentemente rodam dentro de VMs em provedores de nuvem.</p>
+            </div>
+            <div class="pager"><a href="#slide-07">Anterior</a><span>08 / 20</span><a href="#slide-09">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-09">
+        <article class="frame">
+          <aside class="rail"><div class="mark">D</div><div class="rail-dot">09 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">docker / plataforma</span><span class="status">daemon online</span></div>
+            <div class="content">
+              <h2 class="title-lg">Onde entra o Docker?</h2>
+              <div class="grid-3">
+                <div class="tile good"><h3>Construir</h3><p>Cria imagens a partir de instruções.</p></div>
+                <div class="tile good"><h3>Executar</h3><p>Inicia e gerencia containers.</p></div>
+                <div class="tile good"><h3>Distribuir</h3><p>Publica e baixa imagens de registries.</p></div>
+              </div>
+              <div class="callout">Docker é uma plataforma que facilita trabalhar com containers. Container é o conceito; Docker é uma das ferramentas usadas para criá-los e executá-los.</div>
+            </div>
+            <div class="pager"><a href="#slide-08">Anterior</a><span>09 / 20</span><a href="#slide-10">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-10">
+        <article class="frame">
+          <aside class="rail"><div class="mark">→</div><div class="rail-dot">10 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">fluxo / build and run</span><span class="status">pipeline ready</span></div>
+            <div class="content">
+              <h2 class="title-lg">Imagem e container: a analogia dos bolos</h2>
+              <div class="flow">
+                <div class="node hot"><b>Dockerfile</b><br>receita</div>
+                <div class="node"><b>Imagem</b><br>receita pronta</div>
+                <div class="node"><b>Container</b><br>bolo em uso</div>
+              </div>
+              <div class="analogy"><strong>Analogia dos bolos</strong>O Dockerfile é a receita; a imagem é o pacote reutilizável preparado a partir dela; o container é uma instância em execução, como o bolo pronto para ser servido.</div>
+            </div>
+            <div class="pager"><a href="#slide-09">Anterior</a><span>10 / 20</span><a href="#slide-11">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-11">
+        <article class="frame">
+          <aside class="rail"><div class="mark">DF</div><div class="rail-dot">11 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">dockerfile / receita</span><span class="status">instructions parsed</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Dockerfile</h2>
+              <pre class="code">FROM eclipse-temurin:17-jre
+
+COPY build/libs/app.jar app.jar
+
+ENTRYPOINT ["java", "-jar", "app.jar"]</pre>
+              <p class="lead">O Dockerfile descreve os passos para montar uma imagem. Nesta aula usaremos a imagem pronta do MongoDB; na Aula 2, a API Java 17 poderá receber seu próprio Dockerfile.</p>
+            </div>
+            <div class="pager"><a href="#slide-10">Anterior</a><span>11 / 20</span><a href="#slide-12">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-12">
+        <article class="frame">
+          <aside class="rail"><div class="mark">IMG</div><div class="rail-dot">12 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">imagem / template imutável</span><span class="status">tag v1 ready</span></div>
+            <div class="content">
+              <h2 class="title-lg">Imagem Docker</h2>
+              <div class="stack">
+                <div class="layer app">Camada: configuração do MongoDB</div>
+                <div class="layer runtime">Camada: processo MongoDB</div>
+                <div class="layer os">Camadas da imagem base</div>
+              </div>
+              <div class="grid-3">
+                <div class="tile good"><h3>Imutável</h3><p>Uma versão construída não muda.</p></div>
+                <div class="tile good"><h3>Versionada</h3><p>Tags identificam versões.</p></div>
+                <div class="tile good"><h3>Reutilizável</h3><p>Cria vários containers iguais.</p></div>
+              </div>
+            </div>
+            <div class="pager"><a href="#slide-11">Anterior</a><span>12 / 20</span><a href="#slide-13">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-13">
+        <article class="frame">
+          <aside class="rail"><div class="mark">RUN</div><div class="rail-dot">13 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">container / instância</span><span class="status">running</span></div>
+            <div class="content">
+              <h2 class="title-lg">Container é a imagem em execução</h2>
+              <div class="yard">
+                <div class="container-box"><b>api-1</b><span>imagem minha-api:v1</span></div>
+                <div class="container-box"><b>api-2</b><span>imagem minha-api:v1</span></div>
+                <div class="container-box"><b>api-3</b><span>imagem minha-api:v1</span></div>
+                <div class="container-box"><b>api-4</b><span>imagem minha-api:v1</span></div>
+              </div>
+              <p class="lead">Os containers são processos separados criados a partir do mesmo template. Parar um container não apaga a imagem usada para criá-lo.</p>
+            </div>
+            <div class="pager"><a href="#slide-12">Anterior</a><span>13 / 20</span><a href="#slide-14">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-14">
+        <article class="frame">
+          <aside class="rail"><div class="mark">P</div><div class="rail-dot">14 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">rede / publicação de porta</span><span class="status">27017 exposed</span></div>
+            <div class="content">
+              <h2 class="title-lg">Porta do host e porta do container</h2>
+              <pre class="code">ports:
+  - "27017:27017"
+
+localhost:27017  →  mongo:27017</pre>
+              <div class="analogy"><strong>Analogia do endereço e apartamento</strong>A porta do host é a entrada do prédio. A porta interna identifica onde a aplicação atende dentro do container.</div>
+              <div class="callout">O primeiro número é a porta da sua máquina. O segundo é a porta do MongoDB dentro do container. A API da Aula 2 usará `localhost:27017`.</div>
+            </div>
+            <div class="pager"><a href="#slide-13">Anterior</a><span>14 / 20</span><a href="#slide-15">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-15">
+        <article class="frame">
+          <aside class="rail"><div class="mark">V</div><div class="rail-dot">15 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">arquitetura / docker engine</span><span class="status">daemon running</span></div>
+            <div class="content">
+              <h2 class="title-lg">Docker Engine: CLI, API e Daemon</h2>
+              <div class="flow">
+                <div class="node hot">Docker CLI<br>docker ...</div>
+                <div class="node">Docker API<br>requisições</div>
+                <div class="node">Docker Daemon<br>dockerd</div>
+                <div class="node">Imagens e<br>containers</div>
+              </div>
+              <div class="callout">A CLI recebe o comando. A API leva a solicitação ao daemon, que cria e gerencia imagens, containers, redes e volumes.</div>
+            </div>
+            <div class="pager"><a href="#slide-14">Anterior</a><span>15 / 20</span><a href="#slide-16">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-16">
+        <article class="frame">
+          <aside class="rail"><div class="mark">NET</div><div class="rail-dot">16 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">registry / imagem pronta</span><span class="status">image available</span></div>
+            <div class="content">
+              <h2 class="title-lg">De onde vem a imagem do MongoDB?</h2>
+              <div class="grid-2">
+                <div class="tile good"><h3>Docker Hub</h3><p>Registry que disponibiliza imagens prontas, incluindo a imagem oficial `mongo:7`.</p></div>
+                <div class="tile vm"><h3>Tag `:7`</h3><p>Indica a versão principal escolhida para a turma e evita depender de uma versão indefinida.</p></div>
+              </div>
+              <div class="callout">Na primeira execução de `docker compose up -d`, o Docker baixa a imagem se ela ainda não existir na máquina.</div>
+            </div>
+            <div class="pager"><a href="#slide-15">Anterior</a><span>16 / 20</span><a href="#slide-17">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-17">
+        <article class="frame">
+          <aside class="rail"><div class="mark">DC</div><div class="rail-dot">17 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">compose / vários serviços</span><span class="status">stack defined</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Docker Compose</h2>
+              <div class="grid-3">
+                <div class="tile good"><h3>Serviços</h3><p>Define os containers que fazem parte da aplicação.</p></div>
+                <div class="tile good"><h3>Redes</h3><p>Define como os serviços se comunicam.</p></div>
+                <div class="tile good"><h3>Volumes</h3><p>Define onde dados persistentes serão armazenados.</p></div>
+              </div>
+              <pre class="code">docker compose config
+docker compose up -d
+docker compose ps</pre>
+              <p class="lead">O comando atual é <code>docker compose</code>, com espaço. O arquivo <code>docker-compose.yml</code> descreve o ambiente e pode iniciar um ou vários serviços.</p>
+            </div>
+            <div class="pager"><a href="#slide-16">Anterior</a><span>17 / 20</span><a href="#slide-18">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-18">
+        <article class="frame">
+          <aside class="rail"><div class="mark">CLI</div><div class="rail-dot">18 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">comandos / operação básica</span><span class="status">terminal ready</span></div>
+            <div class="content">
+              <h2 class="title-lg">Verifique antes de continuar</h2>
+              <div class="grid-2">
+                <pre class="code">docker --version
+docker compose version
+docker info</pre>
+                <pre class="code">docker compose config
+docker ps
+docker compose ps
+docker compose logs --tail=20 mongo</pre>
+              </div>
+              <p class="lead">Esses comandos confirmam a instalação, validam o arquivo e permitem observar o serviço sem executar limpezas gerais no Docker.</p>
+            </div>
+            <div class="pager"><a href="#slide-17">Anterior</a><span>18 / 20</span><a href="#slide-19">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-19">
+        <article class="frame">
+          <aside class="rail"><div class="mark">!</div><div class="rail-dot">19 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">prática / mongodb local</span><span class="status">mongo ready</span></div>
+            <div class="content top">
+              <h2 class="title-lg">Prática: MongoDB para a API de usuários</h2>
+              <div class="grid-2">
+                <pre class="code">services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"</pre>
+                <pre class="code">localhost:27017
+        ↓
+container:27017
+        ↓
+MongoDB</pre>
+              </div>
+              <pre class="code">docker compose up -d
+docker compose exec mongo mongosh --quiet --eval "db.runCommand({ ping: 1 })"</pre>
+              <p class="lead">Quando o comando retornar <code>{ ok: 1 }</code>, o banco estará pronto para a API Java 17 da próxima aula.</p>
+            </div>
+            <div class="pager"><a href="#slide-18">Anterior</a><span>19 / 20</span><a href="#slide-20">Próximo</a></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="slide" id="slide-20">
+        <article class="frame">
+          <aside class="rail"><div class="mark">OK</div><div class="rail-dot">20 / 20</div></aside>
+          <div class="workspace">
+            <div class="panelbar"><span class="crumb">resumo / carga entregue</span><span class="status">complete</span></div>
+            <div class="content">
+              <h2 class="title-lg">Resumo</h2>
+              <div class="grid-4">
+                <div class="tile vm"><h3>VM</h3><p>Virtualiza uma máquina completa.</p></div>
+                <div class="tile ct"><h3>Container</h3><p>Isola processos compartilhando o kernel.</p></div>
+                <div class="tile good"><h3>Imagem</h3><p>Pacote reutilizável, como `mongo:7`.</p></div>
+                <div class="tile warn"><h3>Compose</h3><p>Descreve e inicia o MongoDB da Aula 2.</p></div>
+              </div>
+              <div class="callout">A próxima etapa é criar a API de usuários com Java 17 e conectá-la ao MongoDB iniciado com este mesmo arquivo.</div>
+            </div>
+            <div class="pager"><a href="#slide-19">Anterior</a><span>20 / 20</span><a href="#slide-01">Início</a></div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
