@@ -53,6 +53,34 @@ Vamos construir uma API extremamente simples de pedidos.
 
 O objetivo da aula é SOLID. Todo elemento que não ajuda a ensinar SOLID deve ser mantido simples.
 
+### Criando o projeto no Spring Initializr
+
+Acesse [https://start.spring.io](https://start.spring.io) e preencha os campos desta forma:
+
+```text
+Project: Gradle - Groovy
+Language: Java
+Spring Boot: mantenha a versão estável sugerida pelo site
+Group: br.edu.upf
+Artifact: pedidos-solid-api
+Name: pedidos-solid-api
+Description: API de pedidos para aula de SOLID
+Package name: br.edu.upf.pedidos
+Packaging: Jar
+Java: 17
+```
+
+Em **Dependencies**, adicione somente:
+
+```text
+Spring Web
+Lombok
+```
+
+Não adicione banco de dados, Spring Data JPA, Validation ou Spring Security. Os pedidos permanecerão em memória para que a prática se concentre nos princípios SOLID.
+
+Clique em **Generate** para baixar o arquivo compactado. Extraia o conteúdo em uma pasta de trabalho e abra a pasta `pedidos-solid-api` na IDE. O projeto já inclui o Gradle Wrapper. No Windows, execute os comandos com `gradlew.bat`; no Linux, use `./gradlew`.
+
 ---
 
 ## 2. Domínio
@@ -342,6 +370,10 @@ public class PedidoService {
     public List<Pedido> listar() {
         return repository.listar();
     }
+
+    public Pedido buscarPorId(Long id) {
+        return repository.buscarPorId(id);
+    }
 }
 ```
 
@@ -367,7 +399,9 @@ package br.edu.upf.pedidos.controller;
 import br.edu.upf.pedidos.model.Pedido;
 import br.edu.upf.pedidos.service.PedidoService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -390,6 +424,11 @@ public class PedidoController {
     @GetMapping
     public List<Pedido> listar() {
         return service.listar();
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Pedido> buscarPorId(@PathVariable Long id) {
+        return ResponseEntity.ofNullable(service.buscarPorId(id));
     }
 }
 ```
@@ -1319,6 +1358,10 @@ public class PedidoService {
 
     public List<Pedido> listar() {
         return repository.listar();
+    }
+
+    public Pedido buscarPorId(Long id) {
+        return repository.buscarPorId(id);
     }
 }
 ```
